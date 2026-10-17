@@ -1,5 +1,16 @@
 import { PrismaClient } from '@prisma/client';
+import { canSeeCost } from '../middleware/auth.js';
 const prisma = new PrismaClient();
+
+function publicProduct(product, seeCost) {
+  if (seeCost) return product;
+  const { costPrice, variants, phoneUnits, ...rest } = product;
+  return {
+    ...rest,
+    variants: (variants || []).map(({ costPrice: _cost, ...variant }) => variant),
+    phoneUnits: (phoneUnits || []).map(({ buyingPrice, minSellingPrice, ...unit }) => unit),
+  };
+}
 
 // Get all products with rich filtering
 export const getProducts = async (req, res) => {
@@ -46,12 +57,12 @@ export const getProducts = async (req, res) => {
         totalStock = p.stockQuantity || 0;
       }
 
-      return {
+      return publicProduct({
         ...p,
         totalStock,
         imageUrls: p.imageUrls ? JSON.parse(p.imageUrls) : [],
         specifications: p.specifications ? JSON.parse(p.specifications) : {},
-      };
+      }, canSeeCost(req));
     });
 
     if (lowStockOnly === 'true') {

@@ -1,5 +1,15 @@
 import { PrismaClient } from '@prisma/client';
+import { canSeeCost } from '../middleware/auth.js';
 const prisma = new PrismaClient();
+
+function publicUnit(unit, seeCost) {
+  if (seeCost) return unit;
+  const { buyingPrice, minSellingPrice, product, ...rest } = unit;
+  const cleanProduct = product
+    ? (({ costPrice, ...productRest }) => productRest)(product)
+    : product;
+  return { ...rest, product: cleanProduct };
+}
 
 // Get all phone units with filters
 export const getPhoneUnits = async (req, res) => {
@@ -29,7 +39,8 @@ export const getPhoneUnits = async (req, res) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    res.json({ success: true, count: units.length, data: units });
+    const seeCost = canSeeCost(req);
+    res.json({ success: true, count: units.length, data: units.map((unit) => publicUnit(unit, seeCost)) });
   } catch (error) {
     res.status(500).json({ error: true, message: error.message });
   }

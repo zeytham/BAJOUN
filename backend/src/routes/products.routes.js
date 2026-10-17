@@ -4,10 +4,10 @@ import { requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
-router.get('/', getProducts);
+router.get('/', requireRole(), getProducts);
 router.post('/', requireRole('ADMIN', 'MANAGER'), createProduct);
 router.delete('/:id', requireRole('ADMIN'), deleteProduct);
-router.get('/alerts/low-stock', getLowStockAlerts);
+router.get('/alerts/low-stock', requireRole(), getLowStockAlerts);
 
 export default router;
 

@@ -10,7 +10,7 @@ import { requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
-router.get('/units', getPhoneUnits);
+router.get('/units', requireRole(), getPhoneUnits);
 router.post('/units', requireRole('ADMIN', 'MANAGER'), addPhoneUnit);
 router.post('/units/bulk-import', requireRole('ADMIN', 'MANAGER'), bulkImportPhoneUnits);
 router.patch('/units/:id', requireRole('ADMIN', 'MANAGER', 'CASHIER'), updatePhoneUnitStatus);

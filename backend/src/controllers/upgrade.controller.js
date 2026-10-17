@@ -108,29 +108,6 @@ export const evaluatePhoneUpgrade = async (req, res) => {
       }
     });
 
-    // 4. If Approved, create TradeInVoucher record linked to Module 2 POS
-    if (status === 'APPROVED_ELIGIBLE') {
-      let cust = await prisma.customer.findUnique({ where: { phone: customerPhone } });
-      if (!cust) {
-        cust = await prisma.customer.create({
-          data: {
-            name: customerName,
-            phone: customerPhone,
-            tinNumber: nidaNumber,
-          }
-        });
-      }
-
-      await prisma.tradeInVoucher.create({
-        data: {
-          code: voucherCode,
-          customerId: cust.id,
-          valueAmount: calculatedAllowance,
-          isRedeemed: false,
-        }
-      });
-    }
-
     res.status(201).json({
       success: true,
       message: status === 'APPROVED_ELIGIBLE' ? 'Upgrade Evaluation Approved!' : 'Device Rejected: Ineligible for trade-up',
@@ -149,10 +126,41 @@ export const evaluatePhoneUpgrade = async (req, res) => {
 export const saveDigitalContract = async (req, res) => {
   try {
     const { id, signatureUrl } = req.body;
+    const record = await prisma.tradeInUpgrade.findUnique({ where: { id } });
+    if (!record) return res.status(404).json({ error: true, message: 'Trade-in record not found' });
+    if (!signatureUrl) return res.status(400).json({ error: true, message: 'Sahihi inahitajika kabla ya vocha.' });
+
     const updated = await prisma.tradeInUpgrade.update({
       where: { id },
-      data: { signatureUrl }
+      data: {
+        signatureUrl,
+        status: record.status === 'APPROVED_ELIGIBLE' ? 'APPROVED_RECEIVED' : record.status,
+      },
     });
+
+    if (updated.status === 'APPROVED_RECEIVED') {
+      const existing = await prisma.tradeInVoucher.findUnique({ where: { code: updated.voucherCode } });
+      if (!existing) {
+        let cust = await prisma.customer.findUnique({ where: { phone: updated.customerPhone } });
+        if (!cust) {
+          cust = await prisma.customer.create({
+            data: {
+              name: updated.customerName,
+              phone: updated.customerPhone,
+              tinNumber: updated.nidaNumber || null,
+            },
+          });
+        }
+        await prisma.tradeInVoucher.create({
+          data: {
+            code: updated.voucherCode,
+            customerId: cust.id,
+            valueAmount: updated.tradeUpAllowance,
+            isRedeemed: false,
+          },
+        });
+      }
+    }
 
     res.json({ success: true, message: 'Digital Signature & Contract saved', data: updated });
   } catch (error) {

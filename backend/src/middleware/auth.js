@@ -5,16 +5,21 @@ export function tokenSecret() {
   return value.length >= 24 ? value : null;
 }
 
-const secret = () => tokenSecret() || '';
-
 export function readUser(req) {
+  const key = tokenSecret();
+  if (!key) return null;
   const header = req.headers.authorization || '';
   if (!header.startsWith('Bearer ')) return null;
   try {
-    return jwt.verify(header.slice(7), secret());
+    return jwt.verify(header.slice(7), key);
   } catch {
     return null;
   }
+}
+
+export function canSeeCost(req) {
+  const user = readUser(req);
+  return user?.role === 'ADMIN' || user?.role === 'MANAGER';
 }
 
 export function requireRole(...roles) {

@@ -69,7 +69,7 @@ export const getFinancialOverview = async (req, res) => {
           if (item.variant) {
             cost = (item.variant.costPrice || 0) * item.quantity;
           } else if (item.product) {
-            cost = (item.product.costPrice || item.product.basePrice * 0.7 || 0) * item.quantity;
+            cost = (item.product.costPrice || 0) * item.quantity;
           }
           accessoryRevenue += rev;
           accessoryCogs += cost;
@@ -79,7 +79,7 @@ export const getFinancialOverview = async (req, res) => {
     });
 
     // 2. Gross Profit
-    const grossProfit = Math.max(0, totalRevenue - totalCogs);
+    const grossProfit = totalRevenue - totalCogs;
 
     // 3. Operating Expenses
     const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);

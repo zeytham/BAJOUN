@@ -8,7 +8,7 @@ const router = express.Router();
 
 function syncTokenOk(req) {
   const expected = process.env.SYNC_TOKEN || '';
-  if (!expected) return process.env.NODE_ENV !== 'production';
+  if (!expected) return false;
   return req.get('x-sync-token') === expected;
 }
 
@@ -62,6 +62,7 @@ router.post('/ingest', async (req, res) => {
 
 router.post('/devices/seen', async (req, res) => {
   try {
+    if (!syncTokenOk(req)) return res.status(401).json({ error: true, message: 'Sync token is not valid' });
     const id = req.get('x-device-id') || req.body?.deviceId;
     if (!id) return res.status(400).json({ error: true, message: 'Device id is required' });
     const device = await prisma.syncDevice.upsert({

@@ -24,16 +24,19 @@ export async function pinMatches(stored, pin) {
   return stored === clean;
 }
 
-export async function findUserByPin(pin, { roles } = {}) {
+export async function findUserByPin(pin, { roles, userId, email } = {}) {
   const clean = normalizePin(pin);
   if (!clean) return null;
+  const wanted = email ? String(email).trim().toLowerCase() : '';
   const users = await prisma.user.findMany({
     where: {
       active: true,
       ...(roles ? { role: { in: roles } } : {}),
+      ...(userId ? { id: userId } : {}),
     },
   });
   for (const user of users) {
+    if (wanted && user.email.toLowerCase() !== wanted) continue;
     if (!(await pinMatches(user.pin, clean))) continue;
     if (!isBcryptHash(user.pin)) {
       await prisma.user.update({ where: { id: user.id }, data: { pin: await hashPin(clean) } });

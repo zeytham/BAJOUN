@@ -305,22 +305,58 @@ export const createSale = async (req, res) => {
 
       // Update Inventory (Mark Phone IMEIs as SOLD & Reduce Accessory Stock)
       if (!isProforma) {
+        const buyer = finalCustomerId
+          ? await tx.customer.findUnique({ where: { id: finalCustomerId } })
+          : null;
+        const buyerName = buyer?.name || customerData?.name || 'Walk-in';
+        const buyerPhone = buyer?.phone || customerData?.phone || '';
+
         for (const item of validatedItems) {
           if (item.phoneUnitId) {
-            await tx.phoneUnit.update({
+            const marked = await tx.phoneUnit.updateMany({
+              where: { id: item.phoneUnitId, status: { not: 'SOLD' } },
+              data: { status: 'SOLD' },
+            });
+            if (marked.count !== 1) {
+              throw new Error('Simu hii tayari imeuza.');
+            }
+            const unit = await tx.phoneUnit.findUnique({
               where: { id: item.phoneUnitId },
-              data: { status: 'SOLD' }
+              include: { product: true },
             });
+            if (unit) {
+              const months = unit.warrantyMonths || 12;
+              const endDate = new Date();
+              endDate.setMonth(endDate.getMonth() + months);
+              const certificateCode = `WARR-${createdSale.invoiceNumber}-${unit.imei1.slice(-6)}`;
+              await tx.warrantyCertificate.upsert({
+                where: { phoneUnitId: unit.id },
+                update: {},
+                create: {
+                  certificateCode,
+                  saleId: createdSale.id,
+                  phoneUnitId: unit.id,
+                  customerName: buyerName,
+                  customerPhone: buyerPhone,
+                  imei1: unit.imei1,
+                  modelName: unit.product?.name || item.productNameSnapshot || 'Simu',
+                  warrantyMonths: months,
+                  endDate,
+                },
+              });
+            }
           } else if (item.variantId) {
-            await tx.productVariant.update({
-              where: { id: item.variantId },
-              data: { stockQuantity: { decrement: item.quantity } }
+            const moved = await tx.productVariant.updateMany({
+              where: { id: item.variantId, stockQuantity: { gte: item.quantity } },
+              data: { stockQuantity: { decrement: item.quantity } },
             });
+            if (moved.count !== 1) throw new Error('Stock haitoshi.');
           } else if (item.productId) {
-            await tx.product.update({
-              where: { id: item.productId },
-              data: { stockQuantity: { decrement: item.quantity } }
+            const moved = await tx.product.updateMany({
+              where: { id: item.productId, stockQuantity: { gte: item.quantity } },
+              data: { stockQuantity: { decrement: item.quantity } },
             });
+            if (moved.count !== 1) throw new Error('Stock haitoshi.');
           }
         }
 

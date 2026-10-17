@@ -121,6 +121,8 @@ model PhoneUnit {
   retailPrice     Float
   minSellingPrice Float
   status          String    @default("IN_STOCK") // IN_STOCK, RESERVED, SOLD, IN_REPAIR, RETURNED
+
+  @@index([status])
   warrantyMonths  Int       @default(12)
   notes           String?
   saleItem        SaleItem?
@@ -203,6 +205,10 @@ model Sale {
   cloudSyncedAt  DateTime?
   cloudSyncError String?
   items          SaleItem[]
+
+  @@index([createdAt])
+  @@index([cashierId])
+  @@index([customerId])
   payments       PaymentTransaction[]
   debt           Debt?
   createdAt      DateTime             @default(now())
@@ -224,6 +230,9 @@ model SaleItem {
   lineTotal           Float
   productNameSnapshot String?
   imeiSnapshot        String?
+
+  @@index([saleId])
+  @@index([productId])
 }
 
 model Debt {

@@ -4,7 +4,8 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Starting Database Seeding for Module 1...');
+  console.log('Seed imezimwa. Haiundi nenosiri la kuanzia na haifuti stoo.');
+  return;
 
   // Clean existing products and units for a fresh seed
   await prisma.saleItem.deleteMany();

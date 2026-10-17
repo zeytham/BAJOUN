@@ -188,7 +188,11 @@ export default function StoreSettingsHub({ settings, onRefreshSettings }) {
       const res = await fetch('/api/auth/unlock-pin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin: testPinInput.trim() }),
+        body: JSON.stringify({
+          pin: testPinInput.trim(),
+          email: JSON.parse(localStorage.getItem('phonevault_user') || '{}').email,
+          userId: JSON.parse(localStorage.getItem('phonevault_user') || '{}').id,
+        }),
       });
       const data = await res.json();
       setPinTestResult(data.success

@@ -361,14 +361,17 @@ export const receiveAndRestockPO = async (req, res) => {
       const product = item.product;
 
       if (product.type !== 'PHONE') {
-        await prisma.product.update({
-          where: { id: product.id },
-          data: {
-            stockQuantity: {
-              increment: item.quantityOrdered,
-            },
-          },
-        });
+        if (item.variantId) {
+          await prisma.productVariant.update({
+            where: { id: item.variantId },
+            data: { stockQuantity: { increment: item.quantityOrdered } },
+          });
+        } else if (!product.hasVariants) {
+          await prisma.product.update({
+            where: { id: product.id },
+            data: { stockQuantity: { increment: item.quantityOrdered } },
+          });
+        }
       }
     }
 

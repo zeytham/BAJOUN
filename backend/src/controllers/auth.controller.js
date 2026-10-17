@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { findUserByPin, hashPin } from '../services/pin.service.js';
+import { findUserByPin } from '../services/pin.service.js';
 
 const prisma = new PrismaClient();
 
@@ -19,30 +19,11 @@ function tooManyAttempts(key) {
   return false;
 }
 
-// Helper: Seed Default Admin User if User table is empty
-const seedDefaultAdmin = async () => {
-  const count = await prisma.user.count();
-  if (count === 0) {
-    const hashedPassword = await bcrypt.hash('password123', 10);
-    await prisma.user.create({
-      data: {
-        name: 'Store Owner / Manager',
-        email: 'admin@phonevault.tz',
-        password: hashedPassword,
-        pin: await hashPin('1234'),
-        role: 'ADMIN',
-      },
-    });
-  }
-};
-
 /**
  * POST /api/auth/login
  */
 export const login = async (req, res) => {
   try {
-    await seedDefaultAdmin();
-
     const { email, password } = req.body;
     if (!email || !password) {
       return res.status(400).json({ error: true, message: 'Email and password are required' });
@@ -102,17 +83,18 @@ export const login = async (req, res) => {
  */
 export const unlockWithPin = async (req, res) => {
   try {
-    await seedDefaultAdmin();
-
-    const { pin } = req.body;
+    const { pin, email, userId } = req.body;
     if (!pin) {
       return res.status(400).json({ success: false, message: 'PIN is required' });
     }
+    if (!email && !userId) {
+      return res.status(400).json({ success: false, message: 'Chagua akaunti kwanza, kisha weka PIN.' });
+    }
 
-    const user = await findUserByPin(pin);
+    const user = await findUserByPin(pin, { userId, email });
 
     if (!user) {
-      return res.status(401).json({ success: false, message: 'PIN sio sahihi! (Invalid 4-digit PIN)' });
+      return res.status(401).json({ success: false, message: 'PIN sio sahihi.' });
     }
 
     return res.json({

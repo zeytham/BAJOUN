@@ -16,14 +16,14 @@ export default function LockScreenModal({ currentUser, storeSettings, onUnlock, 
       const res = await fetch('/api/auth/unlock-pin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin }),
+        body: JSON.stringify({ pin, email: currentUser?.email, userId: currentUser?.id }),
       });
 
       const data = await res.json();
       if (data.success) {
         onUnlock();
       } else {
-        setErrorMsg('PIN sio sahihi! (Default PIN is 1234)');
+        setErrorMsg('PIN sio sahihi.');
         setPin('');
       }
     } catch (err) {
