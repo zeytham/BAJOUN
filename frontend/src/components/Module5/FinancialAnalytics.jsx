@@ -12,6 +12,11 @@ export default function FinancialAnalytics() {
   const [expenses, setExpenses] = useState([]);
   const [auditReport, setAuditReport] = useState(null);
   const [loading, setLoading] = useState(false);
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
+  const [startDate, setStartDate] = useState(monthStart);
+  const [endDate, setEndDate] = useState(today);
+  const [offset, setOffset] = useState(0);
 
   // Modal States
   const [showLogExpenseModal, setShowLogExpenseModal] = useState(false);
@@ -29,7 +34,7 @@ export default function FinancialAnalytics() {
     setLoading(true);
     try {
       const [resOver, resExp, resAudit] = await Promise.all([
-        fetch('/api/financials/overview').then(r => r.json()),
+        fetch(`/api/financials/overview?startDate=${startDate}&endDate=${endDate}&limit=20&offset=${offset}`).then(r => r.json()),
         fetch('/api/financials/expenses').then(r => r.json()),
         fetch('/api/financials/audit-report').then(r => r.json()),
       ]);
@@ -46,7 +51,7 @@ export default function FinancialAnalytics() {
 
   useEffect(() => {
     fetchFinancialData();
-  }, []);
+  }, [startDate, endDate, offset]);
 
   // Submit New Store Expense
   const handleLogExpenseSubmit = async (e) => {
@@ -101,10 +106,10 @@ export default function FinancialAnalytics() {
         <div className="space-y-1.5">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#80ddff]/30 text-sky-950 border border-sky-300 text-xs font-extrabold">
             <DollarSign className="w-4 h-4 text-sky-700 shrink-0" />
-            Module 5 Executive Financial Hub
+            Hesabu
           </div>
           <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
-            Personal Owner Financial Profitability, Expense Tracker & Audit Engine
+            Faida na matumizi
           </h2>
         </div>
 
@@ -197,6 +202,42 @@ export default function FinancialAnalytics() {
               </div>
               <div className="text-[10px] text-sky-700 font-semibold">After Expenses: TSH {(financials?.totalExpenses || 0).toLocaleString()}</div>
             </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-2xl border border-sky-200 flex flex-wrap items-end gap-3">
+            <label className="text-xs font-bold text-slate-600">
+              Kuanzia
+              <input type="date" value={startDate} onChange={(e) => { setOffset(0); setStartDate(e.target.value); }} className="mt-1 block rounded-lg border border-slate-300 px-2 py-1.5 text-slate-900" />
+            </label>
+            <label className="text-xs font-bold text-slate-600">
+              Hadi
+              <input type="date" value={endDate} onChange={(e) => { setOffset(0); setEndDate(e.target.value); }} className="mt-1 block rounded-lg border border-slate-300 px-2 py-1.5 text-slate-900" />
+            </label>
+            <button type="button" onClick={() => setOffset((value) => Math.max(0, value - 20))} className="px-3 py-2 rounded-lg border border-slate-300 text-xs font-bold">Nyuma</button>
+            <button type="button" onClick={() => setOffset((value) => value + 20)} className="px-3 py-2 rounded-lg border border-slate-300 text-xs font-bold">Mbele</button>
+            <span className="text-xs text-slate-500">Mauzo {financials?.range?.total || 0} · ukurasa {Math.floor(offset / 20) + 1}</span>
+          </div>
+
+          <div className="bg-white p-4 sm:p-6 rounded-2xl border border-sky-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-extrabold text-slate-900">Madeni yaliyo wazi</h3>
+              <span className="text-sm font-black text-amber-700">TSH {(financials?.openDebtTotal || 0).toLocaleString()}</span>
+            </div>
+            {(financials?.debts || []).length === 0 ? (
+              <p className="text-sm text-slate-500">Hakuna deni wazi.</p>
+            ) : (
+              <div className="space-y-2">
+                {financials.debts.map((debt) => (
+                  <div key={debt.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                    <div>
+                      <div className="font-bold text-slate-900">{debt.customerName}</div>
+                      <div className="text-xs text-slate-500">{debt.customerPhone} · {debt.invoiceNumber || 'Risiti'}</div>
+                    </div>
+                    <div className="font-black text-slate-900">TSH {Number(debt.balance || 0).toLocaleString()}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Category Margin Breakdown Card */}

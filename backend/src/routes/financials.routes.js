@@ -6,13 +6,16 @@ import {
   deleteStoreExpense,
   getFinancialAuditReport,
 } from '../controllers/financials.controller.js';
+import { requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
-router.get('/overview', getFinancialOverview);
-router.get('/expenses', getStoreExpenses);
-router.post('/expenses', createStoreExpense);
-router.delete('/expenses/:id', deleteStoreExpense);
-router.get('/audit-report', getFinancialAuditReport);
+// Only ADMIN and MANAGER can view financials and audit reports
+router.get('/overview', requireRole('ADMIN', 'MANAGER'), getFinancialOverview);
+router.get('/expenses', requireRole('ADMIN', 'MANAGER'), getStoreExpenses);
+router.post('/expenses', requireRole('ADMIN', 'MANAGER'), createStoreExpense);
+router.delete('/expenses/:id', requireRole('ADMIN'), deleteStoreExpense);
+router.get('/audit-report', requireRole('ADMIN', 'MANAGER'), getFinancialAuditReport);
 
 export default router;
+

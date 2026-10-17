@@ -14,6 +14,7 @@ import {
   DollarSign,
   TrendingUp,
   Settings,
+  Database,
   Users,
 } from 'lucide-react';
 
@@ -25,6 +26,8 @@ export default function Sidebar({
   setIsCollapsed,
   isMobileOpen,
   setIsMobileOpen,
+  linkOnline = true,
+  pendingSales = 0,
 }) {
   const navSections = [
     {
@@ -100,6 +103,11 @@ export default function Sidebar({
           id: 'settings',
           label: 'Store Settings',
           icon: Settings,
+        },
+        {
+          id: 'continuity',
+          label: 'Offline & Backups',
+          icon: Database,
         },
       ],
     },
@@ -221,9 +229,10 @@ export default function Sidebar({
                 </span>
               </div>
               <div className="text-[11px] text-slate-500 flex items-center justify-between">
-                <span>System Status:</span>
-                <span className="text-emerald-600 font-bold flex items-center gap-1">
-                  <CheckCircle className="w-3 h-3 text-emerald-600" /> Live
+                <span>Till:</span>
+                <span className={`font-bold flex items-center gap-1 ${linkOnline ? 'text-emerald-600' : 'text-amber-700'}`}>
+                  <CheckCircle className="w-3 h-3" />
+                  {linkOnline ? (pendingSales > 0 ? `${pendingSales} queued` : 'SQLite') : 'Offline'}
                 </span>
               </div>
             </div>

@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { hashPin, normalizePin } from '../services/pin.service.js';
 
 const prisma = new PrismaClient();
 
@@ -100,25 +101,26 @@ export const updateSettings = async (req, res) => {
  */
 export const updateSecurityCredentials = async (req, res) => {
   try {
-    const { currentPassword, newPassword, newPin, email = 'admin@phonevault.tz' } = req.body;
+    const { currentPassword, newPassword, newPin } = req.body;
+    const adminId = req.user?.id;
 
-    let user = await prisma.user.findFirst({
-      where: { role: 'ADMIN' },
-    });
+    let user = adminId
+      ? await prisma.user.findUnique({ where: { id: adminId } })
+      : await prisma.user.findFirst({ where: { role: 'ADMIN' } });
 
     if (!user) {
-      // Seed default admin if user table empty
-      const hashedPassword = await bcrypt.hash(newPassword || 'password123', 10);
-      user = await prisma.user.create({
-        data: {
-          name: 'Store Owner / Manager',
-          email: 'admin@phonevault.tz',
-          password: hashedPassword,
-          pin: newPin || '1234',
-          role: 'ADMIN',
-        },
-      });
-      return res.json({ success: true, message: 'Owner credentials initialized!' });
+      return res.status(404).json({ success: false, message: 'Admin account not found.' });
+    }
+
+    if (!newPassword && !newPin) {
+      return res.status(400).json({ success: false, message: 'Weka nenosiri jipya au PIN mpya.' });
+    }
+    if (!currentPassword) {
+      return res.status(400).json({ success: false, message: 'Weka nenosiri la sasa kabla ya kubadili.' });
+    }
+    const isValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isValid) {
+      return res.status(401).json({ success: false, message: 'Nenosiri la sasa sio sahihi.' });
     }
 
     const updateData = {};
@@ -126,7 +128,10 @@ export const updateSecurityCredentials = async (req, res) => {
       updateData.password = await bcrypt.hash(newPassword, 10);
     }
     if (newPin) {
-      updateData.pin = String(newPin).padStart(4, '0');
+      if (!normalizePin(newPin)) {
+        return res.status(400).json({ success: false, message: 'PIN iwe tarakimu 4.' });
+      }
+      updateData.pin = await hashPin(newPin);
     }
 
     const updatedUser = await prisma.user.update({
@@ -141,7 +146,6 @@ export const updateSecurityCredentials = async (req, res) => {
         id: updatedUser.id,
         name: updatedUser.name,
         email: updatedUser.email,
-        pin: updatedUser.pin,
       },
     });
   } catch (error) {
@@ -152,7 +156,7 @@ export const updateSecurityCredentials = async (req, res) => {
 
 /**
  * GET /api/settings/users
- * Fetch all registered system users / staff members
+ * Fetch all registered system users / staff members (PIN is hidden for security)
  */
 export const getUsers = async (req, res) => {
   try {
@@ -162,7 +166,6 @@ export const getUsers = async (req, res) => {
         name: true,
         email: true,
         role: true,
-        pin: true,
         active: true,
         createdAt: true,
       },
@@ -181,7 +184,7 @@ export const getUsers = async (req, res) => {
  */
 export const createUser = async (req, res) => {
   try {
-    const { name, email, password, role = 'CASHIER', pin = '1234' } = req.body;
+    const { name, email, password, role = 'CASHIER', pin } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ success: false, message: 'Faza jaza Jina, Email na Password!' });
@@ -192,6 +195,9 @@ export const createUser = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email hii tayari imesajiliwa kwenye mfumo!' });
     }
 
+    if (!normalizePin(pin)) {
+      return res.status(400).json({ success: false, message: 'PIN iwe tarakimu 4.' });
+    }
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = await prisma.user.create({
       data: {
@@ -199,7 +205,7 @@ export const createUser = async (req, res) => {
         email,
         password: hashedPassword,
         role: role.toUpperCase(),
-        pin: String(pin).padStart(4, '0'),
+        pin: await hashPin(pin),
         active: true,
       },
     });
@@ -212,7 +218,6 @@ export const createUser = async (req, res) => {
         name: newUser.name,
         email: newUser.email,
         role: newUser.role,
-        pin: newUser.pin,
         active: newUser.active,
       },
     });
@@ -235,7 +240,12 @@ export const updateUser = async (req, res) => {
     if (name) updateData.name = name;
     if (email) updateData.email = email;
     if (role) updateData.role = role.toUpperCase();
-    if (pin) updateData.pin = String(pin).padStart(4, '0');
+    if (pin) {
+      if (!normalizePin(pin)) {
+        return res.status(400).json({ success: false, message: 'PIN iwe tarakimu 4.' });
+      }
+      updateData.pin = await hashPin(pin);
+    }
     if (typeof active === 'boolean') updateData.active = active;
     if (password) updateData.password = await bcrypt.hash(password, 10);
 
@@ -247,7 +257,6 @@ export const updateUser = async (req, res) => {
         name: true,
         email: true,
         role: true,
-        pin: true,
         active: true,
       },
     });
@@ -305,7 +314,7 @@ export const exportDatabaseBackup = async (req, res) => {
       prisma.storeExpense.findMany(),
       prisma.supplier.findMany(),
       prisma.purchaseOrder.findMany({ include: { items: true } }),
-      prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, pin: true } }),
+      prisma.user.findMany({ select: { id: true, name: true, email: true, role: true, active: true } }),
     ]);
 
     const backupData = {

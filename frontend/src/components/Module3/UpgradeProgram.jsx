@@ -267,10 +267,10 @@ export default function UpgradeProgram({ products = [], phoneUnits = [], onTrans
         <div className="space-y-1.5">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#80ddff]/30 text-sky-950 border border-sky-300 text-xs font-extrabold">
             <ShieldCheck className="w-4 h-4 text-sky-700 shrink-0" />
-            Module 3 Enterprise Trade-In System
+            Kubadilishana
           </div>
           <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
-            Phone Upgrade & Trade-In Allowance Program
+            Kubadilisha simu
           </h2>
         </div>
 
@@ -1010,7 +1010,7 @@ export default function UpgradeProgram({ products = [], phoneUnits = [], onTrans
           <div className="bg-white p-4 sm:p-6 rounded-2xl border border-sky-200 shadow-sm space-y-4">
             <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-sky-600 shrink-0" />
-              Traded Brands Distribution & Quality Floor Audit
+              Bidhaa zilizobadilishwa
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
@@ -1028,12 +1028,6 @@ export default function UpgradeProgram({ products = [], phoneUnits = [], onTrans
                 )}
               </div>
 
-              <div className="p-4 bg-sky-50/80 rounded-xl border border-sky-200 text-xs space-y-2">
-                <span className="font-extrabold text-slate-900 block">Enterprise Operational Standard:</span>
-                <p className="text-slate-600 leading-relaxed">
-                  By running Module 3's strict eligibility diagnostic gate, 100% of retail floor products remain Brand New Sealed units. All traded devices are cleanly redirected to B2B wholesale exporters or restocked with clear `REFURBISHED` badges.
-                </p>
-              </div>
             </div>
           </div>
         </div>

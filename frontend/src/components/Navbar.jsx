@@ -11,12 +11,9 @@ export default function Navbar({ alertCount, onOpenAddPhone, onOpenAddAccessory,
         </div>
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-bold text-white tracking-tight">SmartPhone & Gadget Hub</h1>
-            <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-full">
-              Module 1 Active
-            </span>
+            <h1 className="text-lg font-bold text-white tracking-tight">BAJOUN</h1>
           </div>
-          <p className="text-xs text-slate-400">Inventory & Dynamic Variant Catalog System</p>
+          <p className="text-xs text-slate-400">Stoo</p>
         </div>
       </div>
 

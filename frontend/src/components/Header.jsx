@@ -75,11 +75,13 @@ export default function Header({
       case 'accessories':
         return 'Accessories & Gadgets Catalog';
       case 'compatibility':
-        return 'Compatibility Matcher Engine';
+        return 'Vifaa vinavyolingana';
       case 'financials':
         return 'Owner Financials & Store Audit';
       case 'forecasting':
-        return 'AI Restock Predictor & Supplier Hub';
+        return 'Restock & Supplier Hub';
+      case 'continuity':
+        return 'Offline Sales & Backups';
       case 'settings':
         return 'Store Settings & Security Controls';
       case 'customers':

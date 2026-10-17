@@ -4,11 +4,14 @@ import {
   Lock, Key, Smartphone, Package, ShieldCheck, Printer, ArrowRight, DollarSign,
   CreditCard, SmartphoneNfc, FileText, UserPlus, Pause, Play, Sparkles, RefreshCw, X
 } from 'lucide-react';
+import { commitSale, continuityStatus, verifyOfflineManagerPin } from '../../offline/engine.js';
 
 export default function POSTerminal({
   products,
   phoneUnits,
+  categories = [],
   onRefresh,
+  onPendingChange,
   initialVoucherCode = '',
   initialVoucherValue = 0,
   initialCustomer = null,
@@ -70,6 +73,7 @@ export default function POSTerminal({
   // Left Side Catalog Filters
   const [catalogSearch, setCatalogSearch] = useState('');
   const [catalogCategory, setCatalogCategory] = useState('ALL');
+  const [checkingOut, setCheckingOut] = useState(false);
 
   // Add Item to Cart (Handles IMEI Phones & Accessories)
   const addToCart = (item, type, selectedVariant = null) => {
@@ -89,6 +93,7 @@ export default function POSTerminal({
         imei1: item.imei1,
         unitPrice: item.retailPrice,
         minSellingPrice: item.minSellingPrice,
+        warrantyMonths: item.warrantyMonths,
         quantity: 1,
         discount: 0,
       };
@@ -244,11 +249,17 @@ export default function POSTerminal({
       if (json.success) {
         setManagerPinAuthorized(true);
         setShowManagerPinModal(false);
-      } else {
-        alert('Invalid Manager PIN!');
+        return;
       }
-    } catch (e) {
-      console.error(e);
+      alert(json.message || 'PIN sio sahihi');
+    } catch {
+      const ok = await verifyOfflineManagerPin(managerPinInput);
+      if (ok) {
+        setManagerPinAuthorized(true);
+        setShowManagerPinModal(false);
+        return;
+      }
+      alert('Seva haipatikani. Weka PIN ya meneja kwenye Duka Offline, au unganisha mtandao.');
     }
   };
 
@@ -277,11 +288,15 @@ export default function POSTerminal({
         referenceCode: method === 'MPESA' ? mpesaRef : method === 'TRADEIN_VOUCHER' ? voucherCode : null,
       }));
 
+    if (checkingOut) return;
+    setCheckingOut(true);
     try {
-      const res = await fetch('/api/pos/sales', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const result = await commitSale({
+        grandTotal,
+        amountPaid: totalPaid,
+        changeDue,
+        cart,
+        body: {
           customerData: selectedCustomer,
           isProforma,
           currency,
@@ -298,39 +313,59 @@ export default function POSTerminal({
           discountReason,
           payments: payloadPayments,
           managerPin: managerPinAuthorized ? managerPinInput : undefined,
-        }),
+        },
       });
 
-      const json = await res.json();
-      if (json.success) {
-        setShowReceiptModal(json.data);
+      if (result.success) {
+        setShowReceiptModal(result.data);
         setCart([]);
         setDiscountTotal(0);
         setPaymentSplit({ CASH: 0, MPESA: 0, CARD: 0, BANK_TRANSFER: 0, TRADEIN_VOUCHER: 0 });
-        onRefresh();
-      } else {
-        alert(`Sale error: ${json.message}`);
+        const status = await continuityStatus();
+        if (onPendingChange) onPendingChange(status.pending);
+        if (result.catalog) onRefresh();
       }
     } catch (e) {
-      console.error(e);
+      alert(e.message || 'Mauzo hayajahifadhiwa');
+    } finally {
+      setCheckingOut(false);
     }
   };
 
-  // Filter Left Side Items
-  const availablePhones = phoneUnits.filter(
-    (u) =>
-      u.status === 'IN_STOCK' &&
-      (u.product?.name?.toLowerCase().includes(catalogSearch.toLowerCase()) ||
-        u.imei1?.toLowerCase().includes(catalogSearch.toLowerCase()) ||
-        u.color?.toLowerCase().includes(catalogSearch.toLowerCase()))
-  );
+  const query = catalogSearch.toLowerCase();
+  const showPhones = catalogCategory === 'ALL' || catalogCategory === 'PHONES';
+  const availablePhones = showPhones
+    ? phoneUnits.filter(
+        (u) =>
+          u.status === 'IN_STOCK' &&
+          (u.product?.name?.toLowerCase().includes(query) ||
+            u.imei1?.toLowerCase().includes(query) ||
+            u.color?.toLowerCase().includes(query) ||
+            u.product?.brand?.name?.toLowerCase().includes(query))
+      )
+    : [];
 
-  const availableAccessories = products.filter(
-    (p) =>
-      p.type !== 'PHONE' &&
-      (p.name?.toLowerCase().includes(catalogSearch.toLowerCase()) ||
-        p.category?.name?.toLowerCase().includes(catalogSearch.toLowerCase()))
-  );
+  const availableAccessories = products.filter((p) => {
+    if (p.type === 'PHONE') return false;
+    const matchesSearch =
+      !query ||
+      p.name?.toLowerCase().includes(query) ||
+      p.category?.name?.toLowerCase().includes(query) ||
+      p.barcode?.toLowerCase() === query ||
+      p.sku?.toLowerCase() === query;
+    if (!matchesSearch) return false;
+    if (catalogCategory === 'ALL' || catalogCategory === 'ACCESSORIES') return true;
+    if (catalogCategory === 'PHONES') return false;
+    return p.categoryId === catalogCategory || p.category?.id === catalogCategory;
+  });
+
+  const departments = [
+    { id: 'ALL', label: 'All' },
+    { id: 'PHONES', label: 'Phones' },
+    ...categories
+      .filter((category) => category.slug !== 'smartphones')
+      .map((category) => ({ id: category.id, label: category.name })),
+  ];
 
   return (
     <div className="space-y-6">
@@ -398,27 +433,33 @@ export default function POSTerminal({
           </form>
 
           {/* Search & Category Filter */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
             <div className="relative">
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
               <input
                 type="text"
-                placeholder="Lookup phone model, cover, charger..."
+                placeholder="Search model, brand, cover, charger, barcode..."
                 value={catalogSearch}
                 onChange={(e) => setCatalogSearch(e.target.value)}
                 className="w-full bg-white border border-sky-200 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-sky-500 shadow-sm"
               />
             </div>
-
-            <select
-              value={catalogCategory}
-              onChange={(e) => setCatalogCategory(e.target.value)}
-              className="bg-white border border-sky-200 rounded-xl px-4 py-2.5 text-xs text-slate-700 font-bold focus:outline-none focus:border-sky-500 shadow-sm"
-            >
-              <option value="ALL">All Items (Phones & Accessories)</option>
-              <option value="PHONES">Smartphones (IMEIs)</option>
-              <option value="ACCESSORIES">Accessories & Gadgets</option>
-            </select>
+            <div className="flex gap-1.5 overflow-x-auto pb-1">
+              {departments.map((department) => (
+                <button
+                  key={department.id}
+                  type="button"
+                  onClick={() => setCatalogCategory(department.id)}
+                  className={`shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold border ${
+                    catalogCategory === department.id
+                      ? 'bg-[#0284c7] text-white border-[#0284c7]'
+                      : 'bg-white text-slate-700 border-sky-200'
+                  }`}
+                >
+                  {department.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Catalog Grid */}
@@ -467,7 +508,7 @@ export default function POSTerminal({
             )}
 
             {/* Accessories List */}
-            {(catalogCategory === 'ALL' || catalogCategory === 'ACCESSORIES') && (
+            {(catalogCategory !== 'PHONES') && (
               <div className="space-y-2 pt-2">
                 <div className="text-xs font-extrabold text-slate-700 flex items-center gap-1">
                   <Package className="w-4 h-4 text-purple-600" /> Accessories & Gadgets ({availableAccessories.length}):
@@ -643,7 +684,7 @@ export default function POSTerminal({
               {/* Trade-In Voucher Payment Row */}
               <div className="pt-1 border-t border-sky-100 space-y-1">
                 <label className="text-[10px] text-sky-800 font-extrabold flex items-center justify-between">
-                  <span>🎟️ Module 3 Trade-In Voucher Allowance (TSH):</span>
+                  <span>Kubadilishana (TSH)</span>
                   {voucherCode && <span className="font-mono text-[9px] bg-sky-100 text-sky-900 px-1.5 rounded">{voucherCode}</span>}
                 </label>
                 <div className="grid grid-cols-12 gap-1 text-xs">
@@ -709,10 +750,11 @@ export default function POSTerminal({
 
               <button
                 onClick={() => handleCheckout(false)}
-                className="sky-btn-main px-4 py-3 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg"
+                disabled={checkingOut}
+                className="sky-btn-main px-4 py-3 rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg disabled:opacity-60"
               >
                 <Printer className="w-4 h-4" />
-                <span>Complete & Print</span>
+                <span>{checkingOut ? 'Inahifadhi...' : 'Complete & Print'}</span>
               </button>
             </div>
           </div>

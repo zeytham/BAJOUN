@@ -15,7 +15,7 @@ model User {
   email     String      @unique
   password  String
   role      String      @default("CASHIER") // ADMIN, MANAGER, CASHIER, TECHNICIAN
-  pin       String      @default("1234")    // 4-digit PIN for manager discount overrides
+  pin       String      @default("")        // bcrypt hash of the 4-digit PIN
   active    Boolean     @default(true)
   sales     Sale[]
   shifts    CashShift[]
@@ -147,6 +147,7 @@ model Customer {
   tinNumber  String?
   totalSpent Float            @default(0)
   sales      Sale[]
+  debts      Debt[]
   vouchers   TradeInVoucher[]
   createdAt  DateTime         @default(now())
 }
@@ -196,8 +197,14 @@ model Sale {
   amountPaid     Float
   changeDue      Float                @default(0)
   status         String               @default("COMPLETED") // COMPLETED, PARKED, PARTIAL, REFUNDED
+  clientSaleId   String?              @unique
+  deviceId       String?
+  origin         String               @default("COUNTER") // COUNTER, DEVICE
+  cloudSyncedAt  DateTime?
+  cloudSyncError String?
   items          SaleItem[]
   payments       PaymentTransaction[]
+  debt           Debt?
   createdAt      DateTime             @default(now())
 }
 
@@ -211,10 +218,40 @@ model SaleItem {
   variant     ProductVariant? @relation(fields: [variantId], references: [id])
   phoneUnitId String?         @unique
   phoneUnit   PhoneUnit?      @relation(fields: [phoneUnitId], references: [id])
-  unitPrice   Float
-  quantity    Int             @default(1)
-  discount    Float           @default(0)
-  lineTotal   Float
+  unitPrice           Float
+  quantity            Int             @default(1)
+  discount            Float           @default(0)
+  lineTotal           Float
+  productNameSnapshot String?
+  imeiSnapshot        String?
+}
+
+model Debt {
+  id            String        @id @default(uuid())
+  saleId        String?       @unique
+  sale          Sale?         @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  sourceSaleId  String        @default("")
+  invoiceNumber String        @default("")
+  customerId    String?
+  customer      Customer?     @relation(fields: [customerId], references: [id])
+  customerName  String
+  customerPhone String        @default("")
+  principal     Float
+  balance       Float
+  status        String        @default("OPEN") // OPEN, PAID, VOID
+  openedAt      DateTime      @default(now())
+  payments      DebtPayment[]
+}
+
+model DebtPayment {
+  id          String   @id @default(uuid())
+  debtId      String
+  debt        Debt     @relation(fields: [debtId], references: [id], onDelete: Cascade)
+  amount      Float
+  method      String   @default("CASH")
+  note        String   @default("")
+  cashierName String   @default("")
+  paidAt      DateTime @default(now())
 }
 
 model PaymentTransaction {
@@ -370,6 +407,28 @@ model StoreSetting {
 }
 
 // ================= SMS LOGS DATABASE MODEL ================= //
+
+model SyncDevice {
+  id         String   @id
+  label      String?
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+}
+
+model BackupRun {
+  id              String    @id @default(uuid())
+  tier            String
+  fileName        String
+  bytes           Int       @default(0)
+  sha256          String    @default("")
+  status          String
+  location        String    @default("")
+  detail          String?
+  restoreTestedAt DateTime?
+  restoreStatus   String    @default("UNTESTED")
+  restoreDetail   String?
+  createdAt       DateTime  @default(now())
+}
 
 model SmsLog {
   id          String   @id @default(uuid())

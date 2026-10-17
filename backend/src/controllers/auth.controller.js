@@ -1,8 +1,23 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { findUserByPin, hashPin } from '../services/pin.service.js';
 
 const prisma = new PrismaClient();
+
+const loginAttempts = new Map();
+
+function tooManyAttempts(key) {
+  const now = Date.now();
+  const bucket = (loginAttempts.get(key) || []).filter((time) => now - time < 10 * 60 * 1000);
+  if (bucket.length >= 8) {
+    loginAttempts.set(key, bucket);
+    return true;
+  }
+  bucket.push(now);
+  loginAttempts.set(key, bucket);
+  return false;
+}
 
 // Helper: Seed Default Admin User if User table is empty
 const seedDefaultAdmin = async () => {
@@ -14,7 +29,7 @@ const seedDefaultAdmin = async () => {
         name: 'Store Owner / Manager',
         email: 'admin@phonevault.tz',
         password: hashedPassword,
-        pin: '1234',
+        pin: await hashPin('1234'),
         role: 'ADMIN',
       },
     });
@@ -32,6 +47,10 @@ export const login = async (req, res) => {
     if (!email || !password) {
       return res.status(400).json({ error: true, message: 'Email and password are required' });
     }
+    const attemptKey = String(email).toLowerCase();
+    if (tooManyAttempts(attemptKey)) {
+      return res.status(429).json({ error: true, message: 'Majaribio mengi. Subiri dakika kumi.' });
+    }
 
     const user = await prisma.user.findUnique({ where: { email } });
 
@@ -39,14 +58,25 @@ export const login = async (req, res) => {
       return res.status(401).json({ error: true, message: 'Taarifa za kuingia sio sahihi (Invalid credentials)' });
     }
 
+    if (!user.active) {
+      return res.status(403).json({ error: true, message: 'Akaunti hii imesitishwa na Msimamizi (Account deactivated).' });
+    }
+
     const isValid = await bcrypt.compare(password, user.password);
     if (!isValid) {
       return res.status(401).json({ error: true, message: 'Password sio sahihi (Invalid password)' });
     }
 
+    loginAttempts.delete(attemptKey);
+
+    const signingKey = process.env.JWT_SECRET || '';
+    if (signingKey.length < 24) {
+      return res.status(500).json({ error: true, message: 'JWT_SECRET haijawekwa kwenye seva.' });
+    }
+
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role, name: user.name },
-      process.env.JWT_SECRET || 'phonevault_secret_key_2026',
+      signingKey,
       { expiresIn: '7d' }
     );
 
@@ -58,7 +88,6 @@ export const login = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        pin: user.pin,
       },
     });
   } catch (error) {
@@ -80,9 +109,7 @@ export const unlockWithPin = async (req, res) => {
       return res.status(400).json({ success: false, message: 'PIN is required' });
     }
 
-    const user = await prisma.user.findFirst({
-      where: { pin: String(pin).padStart(4, '0') },
-    });
+    const user = await findUserByPin(pin);
 
     if (!user) {
       return res.status(401).json({ success: false, message: 'PIN sio sahihi! (Invalid 4-digit PIN)' });

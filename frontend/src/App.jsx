@@ -17,6 +17,9 @@ import StoreSettingsHub from './components/Settings/StoreSettingsHub';
 import CustomerCrmHub from './components/Module8/CustomerCrmHub';
 import LoginPortal from './components/Auth/LoginPortal';
 import LockScreenModal from './components/Auth/LockScreenModal';
+import ContinuityDesk from './components/System/ContinuityDesk';
+import OfflineStatusBar from './components/System/OfflineStatusBar';
+import { loadWorkingCatalog, noteServerCatalog, continuityStatus } from './offline/engine.js';
 
 
 import { Smartphone, Package, ShieldCheck, AlertTriangle, Layers, DollarSign, ShoppingCart } from 'lucide-react';
@@ -27,9 +30,14 @@ export default function App() {
   // Auth & Session States
   const [currentUser, setCurrentUser] = useState(() => {
     const saved = localStorage.getItem('phonevault_user');
-    return saved ? JSON.parse(saved) : { id: 'demo-1', name: 'Store Owner', email: 'admin@phonevault.tz', role: 'ADMIN' };
+    const token = localStorage.getItem('phonevault_token');
+    const offline = localStorage.getItem('phonevault_offline_session');
+    if (saved && (token || offline)) return JSON.parse(saved);
+    return null;
   });
   const [isLocked, setIsLocked] = useState(false);
+  const [linkOnline, setLinkOnline] = useState(() => navigator.onLine);
+  const [pendingSales, setPendingSales] = useState(0);
   const [storeSettings, setStoreSettings] = useState(null);
 
   // Sidebar Layout States
@@ -77,8 +85,25 @@ export default function App() {
     }
   };
 
+  const applyCatalog = (catalog) => {
+    if (!catalog) return;
+    if (Array.isArray(catalog.products)) setProducts(catalog.products);
+    if (Array.isArray(catalog.phoneUnits)) setPhoneUnits(catalog.phoneUnits);
+    if (Array.isArray(catalog.categories)) setCategories(catalog.categories);
+    if (Array.isArray(catalog.brands)) setBrands(catalog.brands);
+    if (Array.isArray(catalog.phoneModels)) setPhoneModels(catalog.phoneModels);
+    if (Array.isArray(catalog.alerts)) setAlerts(catalog.alerts);
+    if (catalog.settings) setStoreSettings(catalog.settings);
+  };
+
   const fetchAllData = async () => {
     setLoading(true);
+    const cached = await loadWorkingCatalog();
+    if (cached) applyCatalog(cached);
+    if (!navigator.onLine) {
+      setLoading(false);
+      return;
+    }
     fetchStoreSettings();
     try {
       const safeFetch = async (url) => {
@@ -91,23 +116,31 @@ export default function App() {
         }
       };
 
-      const [resProd, resPhones, resCat, resBrands, resModels, resAlerts] = await Promise.all([
+      const [resProd, resPhones, resCat, resBrands, resModels, resAlerts, resSettings] = await Promise.all([
         safeFetch('/api/products'),
         safeFetch('/api/phones/units'),
         safeFetch('/api/categories'),
         safeFetch('/api/categories/brands'),
         safeFetch('/api/categories/models'),
         safeFetch('/api/products/alerts/low-stock'),
+        safeFetch('/api/settings'),
       ]);
 
-      if (resProd.success && Array.isArray(resProd.data)) setProducts(resProd.data);
-      if (resPhones.success && Array.isArray(resPhones.data)) setPhoneUnits(resPhones.data);
-      if (resCat.success && Array.isArray(resCat.data)) setCategories(resCat.data);
-      if (resBrands.success && Array.isArray(resBrands.data)) setBrands(resBrands.data);
-      if (resModels.success && Array.isArray(resModels.data)) setPhoneModels(resModels.data);
-      if (resAlerts.success && Array.isArray(resAlerts.data)) setAlerts(resAlerts.data);
+      const serverCatalog = {
+        products: resProd.success && Array.isArray(resProd.data) ? resProd.data : cached?.products || [],
+        phoneUnits: resPhones.success && Array.isArray(resPhones.data) ? resPhones.data : cached?.phoneUnits || [],
+        categories: resCat.success && Array.isArray(resCat.data) ? resCat.data : cached?.categories || [],
+        brands: resBrands.success && Array.isArray(resBrands.data) ? resBrands.data : cached?.brands || [],
+        phoneModels: resModels.success && Array.isArray(resModels.data) ? resModels.data : cached?.phoneModels || [],
+        alerts: resAlerts.success && Array.isArray(resAlerts.data) ? resAlerts.data : [],
+        settings: resSettings.success ? resSettings.data : cached?.settings || null,
+      };
+      const anyLive = [resProd, resPhones, resCat].some((row) => row.success);
+      const working = anyLive ? await noteServerCatalog(serverCatalog) : cached;
+      applyCatalog(working || serverCatalog);
     } catch (err) {
       console.error('Data loading error:', err);
+      if (cached) applyCatalog(cached);
     } finally {
       setLoading(false);
     }
@@ -116,11 +149,21 @@ export default function App() {
   const handleLogout = () => {
     localStorage.removeItem('phonevault_token');
     localStorage.removeItem('phonevault_user');
+    localStorage.removeItem('phonevault_offline_session');
     setCurrentUser(null);
   };
 
   useEffect(() => {
     fetchAllData();
+    continuityStatus().then((status) => setPendingSales(status.pending)).catch(() => {});
+    const on = () => setLinkOnline(true);
+    const off = () => setLinkOnline(false);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    return () => {
+      window.removeEventListener('online', on);
+      window.removeEventListener('offline', off);
+    };
   }, []);
 
   // Calculate Total Valuation of Inventory
@@ -178,6 +221,8 @@ export default function App() {
         setIsCollapsed={setIsSidebarCollapsed}
         isMobileOpen={isMobileNavOpen}
         setIsMobileOpen={setIsMobileNavOpen}
+        linkOnline={linkOnline}
+        pendingSales={pendingSales}
       />
 
       {/* Main Content Area */}
@@ -206,6 +251,12 @@ export default function App() {
         />
 
         {/* Page Content */}
+        <OfflineStatusBar
+          online={linkOnline}
+          pending={pendingSales}
+          onOpen={() => setActiveTab('continuity')}
+        />
+
         <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto">
           {/* Executive Overview Statistics */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -264,12 +315,18 @@ export default function App() {
               <POSTerminal
                 products={products}
                 phoneUnits={phoneUnits}
+                categories={categories}
                 onRefresh={fetchAllData}
+                onPendingChange={setPendingSales}
                 initialVoucherCode={posTransferData?.voucherCode}
                 initialVoucherValue={posTransferData?.voucherValue}
                 initialCustomer={posTransferData?.customer}
                 initialPhoneUnit={posTransferData?.targetPhoneUnit}
               />
+            )}
+
+            {activeTab === 'continuity' && (
+              <ContinuityDesk onSync={fetchAllData} />
             )}
 
             {activeTab === 'settings' && (
@@ -336,7 +393,7 @@ export default function App() {
 
         {/* Footer */}
         <footer className="border-t border-sky-200/80 py-6 text-center text-xs text-slate-600">
-          PhoneVault Pro Enterprise • Built with Node.js, React, Prisma & Tailwind CSS
+          PhoneVault POS • SQLite dukani • Mauzo yanaendelea mtandao ukikatika
         </footer>
       </div>
 

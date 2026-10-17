@@ -1,60 +1,9 @@
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
-// Helper: Seed Default Suppliers if table is empty
-const seedDefaultSuppliers = async () => {
-  const count = await prisma.supplier.count();
-  if (count === 0) {
-    await prisma.supplier.createMany({
-      data: [
-        {
-          name: 'Apple Authorized Distributor East Africa',
-          contactPerson: 'David Minja',
-          phone: '+255 754 112 233',
-          email: 'orders@apple-distributor-tz.com',
-          address: 'Kariakoo Commercial Complex, Dar es Salaam',
-          brandSupplied: 'Apple',
-          leadTimeDays: 2,
-          paymentTerms: 'NET_30',
-        },
-        {
-          name: 'Samsung Electronics Tanzania Hub',
-          contactPerson: 'Fatma Juma',
-          phone: '+255 788 445 566',
-          email: 'b2b@samsung-tz.com',
-          address: 'Samora Avenue, CBD, Dar es Salaam',
-          brandSupplied: 'Samsung',
-          leadTimeDays: 3,
-          paymentTerms: 'CASH_ON_DELIVERY',
-        },
-        {
-          name: 'Anker & Soundcore Official Agency',
-          contactPerson: 'Hassan Kazi',
-          phone: '+255 655 990 011',
-          email: 'sales@anker-official.tz',
-          address: 'Aggrey Street, Kariakoo, Dar es Salaam',
-          brandSupplied: 'Anker',
-          leadTimeDays: 1,
-          paymentTerms: 'PREPAID',
-        },
-        {
-          name: 'Baseus & Joyroom Regional Importer',
-          contactPerson: 'Grace Masawe',
-          phone: '+255 712 334 455',
-          email: 'logistics@baseus-tz.com',
-          address: 'Gerezani Trade Zone, Dar es Salaam',
-          brandSupplied: 'Baseus',
-          leadTimeDays: 2,
-          paymentTerms: 'NET_30',
-        },
-      ],
-    });
-  }
-};
-
 /**
  * GET /api/forecasting/velocity
- * AI Sales Velocity Rate & Days-of-Inventory Remaining (DIR)
+ * Units sold per day, and days of stock left.
  */
 export const getSalesVelocity = async (req, res) => {
   try {
@@ -262,7 +211,6 @@ export const getAbcMatrix = async (req, res) => {
  */
 export const getSuppliers = async (req, res) => {
   try {
-    await seedDefaultSuppliers();
     const suppliers = await prisma.supplier.findMany({
       include: {
         purchaseOrders: true,

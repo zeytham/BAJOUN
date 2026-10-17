@@ -8,17 +8,18 @@ import {
   resolveSupplierRmaClaim,
   getWarrantyAnalytics,
 } from '../controllers/warranties.controller.js';
+import { requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
-router.get('/', getWarrantyCertificates);
-router.get('/analytics', getWarrantyAnalytics);
-router.get('/verify/:term', verifyWarrantyByImei);
-router.post('/issue', createWarrantyCertificate);
+router.get('/', requireRole('ADMIN', 'MANAGER', 'CASHIER'), getWarrantyCertificates);
+router.get('/analytics', requireRole('ADMIN', 'MANAGER'), getWarrantyAnalytics);
+router.get('/verify/:term', requireRole('ADMIN', 'MANAGER', 'CASHIER'), verifyWarrantyByImei);
+router.post('/issue', requireRole('ADMIN', 'MANAGER', 'CASHIER'), createWarrantyCertificate);
 
 // Supplier RMA Routes
-router.get('/rma', getSupplierRmaClaims);
-router.post('/rma', createSupplierRmaClaim);
-router.patch('/rma/:id/resolve', resolveSupplierRmaClaim);
+router.get('/rma', requireRole('ADMIN', 'MANAGER', 'CASHIER'), getSupplierRmaClaims);
+router.post('/rma', requireRole('ADMIN', 'MANAGER', 'CASHIER'), createSupplierRmaClaim);
+router.patch('/rma/:id/resolve', requireRole('ADMIN', 'MANAGER'), resolveSupplierRmaClaim);
 
 export default router;

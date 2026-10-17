@@ -7,17 +7,18 @@ import {
   createBrand,
   createPhoneModel,
 } from '../controllers/categories.controller.js';
+import { requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
 router.get('/', getCategories);
-router.post('/', createCategory);
+router.post('/', requireRole('ADMIN', 'MANAGER'), createCategory);
 
 router.get('/brands', getBrands);
-router.post('/brands', createBrand);
+router.post('/brands', requireRole('ADMIN', 'MANAGER'), createBrand);
 
 router.get('/models', getPhoneModels);
-router.post('/models', createPhoneModel);
+router.post('/models', requireRole('ADMIN', 'MANAGER'), createPhoneModel);
 
 export default router;
 

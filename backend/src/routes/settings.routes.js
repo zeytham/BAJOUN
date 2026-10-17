@@ -10,22 +10,24 @@ import {
   deleteUser,
   getSystemMetrics,
 } from '../controllers/settings.controller.js';
+import { requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
+// Store settings: public read for store receipt/branding, restricted update
 router.get('/', getSettings);
-router.put('/', updateSettings);
-router.post('/security', updateSecurityCredentials);
-router.get('/export-backup', exportDatabaseBackup);
+router.put('/', requireRole('ADMIN', 'MANAGER'), updateSettings);
+router.post('/security', requireRole('ADMIN'), updateSecurityCredentials);
+router.get('/export-backup', requireRole('ADMIN'), exportDatabaseBackup);
 
-// Staff Users & Role Access routes
-router.get('/users', getUsers);
-router.post('/users', createUser);
-router.put('/users/:id', updateUser);
-router.delete('/users/:id', deleteUser);
+// Staff Users & Role Access routes (Strictly Admin / Manager)
+router.get('/users', requireRole('ADMIN', 'MANAGER'), getUsers);
+router.post('/users', requireRole('ADMIN'), createUser);
+router.put('/users/:id', requireRole('ADMIN'), updateUser);
+router.delete('/users/:id', requireRole('ADMIN'), deleteUser);
 
 // System Health & Metrics
-router.get('/metrics', getSystemMetrics);
+router.get('/metrics', requireRole('ADMIN', 'MANAGER'), getSystemMetrics);
 
 export default router;
 

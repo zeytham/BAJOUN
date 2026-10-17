@@ -35,8 +35,9 @@ export default function StoreSettingsHub({ settings, onRefreshSettings }) {
   const [exchangeRate, setExchangeRate] = useState(settings?.exchangeRate || 2650);
   const [taxRate, setTaxRate] = useState(settings?.taxRate || 18);
 
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [newPin, setNewPin] = useState(settings?.pin || '1234');
+  const [newPin, setNewPin] = useState('');
 
   // Interactive PIN Tester state
   const [testPinInput, setTestPinInput] = useState('');
@@ -159,6 +160,7 @@ export default function StoreSettingsHub({ settings, onRefreshSettings }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          currentPassword,
           newPassword,
           newPin,
         }),
@@ -167,7 +169,9 @@ export default function StoreSettingsHub({ settings, onRefreshSettings }) {
       const data = await res.json();
       if (data.success) {
         setSuccessMsg('Password na Manager PIN zimebadilishwa.');
+        setCurrentPassword('');
         setNewPassword('');
+        setNewPin('');
       } else {
         alert(data.message);
       }
@@ -178,13 +182,20 @@ export default function StoreSettingsHub({ settings, onRefreshSettings }) {
     }
   };
 
-  const handleTestPin = (e) => {
+  const handleTestPin = async (e) => {
     e.preventDefault();
-    const currentActivePin = newPin || settings?.pin || '1234';
-    if (testPinInput.trim() === currentActivePin.trim()) {
-      setPinTestResult({ valid: true, msg: 'Manager Override PIN iko sahihi.' });
-    } else {
-      setPinTestResult({ valid: false, msg: 'PIN sio sahihi.' });
+    try {
+      const res = await fetch('/api/auth/unlock-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: testPinInput.trim() }),
+      });
+      const data = await res.json();
+      setPinTestResult(data.success
+        ? { valid: true, msg: 'Manager Override PIN iko sahihi.' }
+        : { valid: false, msg: 'PIN sio sahihi.' });
+    } catch {
+      setPinTestResult({ valid: false, msg: 'PIN haijathibitishwa.' });
     }
   };
 
@@ -665,6 +676,17 @@ export default function StoreSettingsHub({ settings, onRefreshSettings }) {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-semibold">
+              <div className="sm:col-span-2">
+                <label className="block text-slate-700 mb-1">Nenosiri la sasa</label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Nenosiri unalotumia sasa"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-semibold text-slate-900 bg-white focus:outline-none focus:border-sky-500"
+                />
+              </div>
               <div>
                 <label className="block text-slate-700 mb-1">New Password</label>
                 <input
@@ -681,7 +703,7 @@ export default function StoreSettingsHub({ settings, onRefreshSettings }) {
                 <input
                   type="password"
                   maxLength={4}
-                  placeholder="1234"
+                  placeholder="PIN mpya"
                   value={newPin}
                   onChange={(e) => setNewPin(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-mono font-bold text-slate-900 bg-white text-center text-sm focus:outline-none focus:border-sky-500"

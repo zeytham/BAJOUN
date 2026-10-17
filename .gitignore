@@ -15,8 +15,18 @@ dist/
 *.db-journal
 prisma/dev.db
 
+# Shop backups, encryption key, Android build output
+backend/backups/
+backend/data/
+*.apk
+android/.gradle/
+android/build/
+android/app/build/
+
 # OS / IDE
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+**/.kotlin/
+**/*.salive

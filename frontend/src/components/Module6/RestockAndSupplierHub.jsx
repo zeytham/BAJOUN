@@ -93,10 +93,10 @@ export default function RestockAndSupplierHub({ products = [], onRefresh }) {
         <div className="space-y-1.5">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#80ddff]/30 text-sky-950 border border-sky-300 text-xs font-extrabold">
             <TrendingUp className="w-4 h-4 text-sky-700 shrink-0" />
-            Module 6 Executive Supplier Hub
+            Wasambazaji
           </div>
           <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
-            Sales Velocity & Supplier Restock Engine
+            Stoo na oda
           </h2>
         </div>
 
@@ -127,7 +127,7 @@ export default function RestockAndSupplierHub({ products = [], onRefresh }) {
           }`}
         >
           <TrendingUp className="w-4 h-4 shrink-0" />
-          <span>AI Restock Predictor</span>
+          <span>Restock planner</span>
         </button>
 
         <button
@@ -167,12 +167,12 @@ export default function RestockAndSupplierHub({ products = [], onRefresh }) {
         </button>
       </div>
 
-      {/* TAB 1: AI RESTOCK PREDICTOR & SALES VELOCITY */}
+      {/* Restock */}
       {activeTab === 'velocity' && (
         <div className="space-y-4">
           <div className="bg-white rounded-2xl border border-sky-200 overflow-hidden shadow-sm p-4 sm:p-0">
             {loading ? (
-              <div className="p-12 text-center text-slate-500 text-xs">Loading AI velocity predictions...</div>
+              <div className="p-12 text-center text-slate-500 text-xs">Loading sales velocity...</div>
             ) : velocityData.length === 0 ? (
               <div className="p-12 text-center text-slate-500 text-xs">No restock predictions generated.</div>
             ) : (
@@ -193,7 +193,7 @@ export default function RestockAndSupplierHub({ products = [], onRefresh }) {
                             ? 'bg-amber-100 text-amber-800 border border-amber-300'
                             : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                         }`}>
-                          {item.status === 'CRITICAL_STOCKOUT_RISK' ? 'CRITICAL' : item.status}
+                          {item.status === 'CRITICAL_STOCKOUT_RISK' ? 'Chini' : item.status === 'REORDER_NEEDED' ? 'Agiza' : 'Sawa'}
                         </span>
                       </div>
 
@@ -203,13 +203,13 @@ export default function RestockAndSupplierHub({ products = [], onRefresh }) {
                           <span className="font-extrabold text-slate-900">{item.currentStock} units</span>
                         </div>
                         <div>
-                          <span className="text-[10px] text-slate-500 block font-semibold">Days Remaining (DIR)</span>
+                          <span className="text-[10px] text-slate-500 block font-semibold">Siku zilizobaki</span>
                           <span className="font-extrabold text-sky-900">{item.daysRemaining} days</span>
                         </div>
                       </div>
 
                       <div className="pt-2 border-t border-sky-200/80 flex items-center justify-between text-xs">
-                        <span className="text-slate-600 font-semibold">Suggested Reorder: <strong>{item.recommendedReorder} units</strong></span>
+                        <span className="text-slate-600 font-semibold">Agiza: <strong>{item.recommendedReorder}</strong></span>
                         <button
                           onClick={() => setIsCreatePoOpen(true)}
                           className="px-3 py-1.5 rounded-xl bg-sky-600 text-white font-bold text-[11px] hover:bg-sky-700"
@@ -229,10 +229,10 @@ export default function RestockAndSupplierHub({ products = [], onRefresh }) {
                         <th className="p-4">Item Name</th>
                         <th className="p-4">Brand & Category</th>
                         <th className="p-4">Current Stock</th>
-                        <th className="p-4">Daily Velocity</th>
-                        <th className="p-4">Days Remaining (DIR)</th>
+                        <th className="p-4">Kwa siku</th>
+                        <th className="p-4">Siku zilizobaki</th>
                         <th className="p-4">Stock Status</th>
-                        <th className="p-4 text-right">Suggested Reorder</th>
+                        <th className="p-4 text-right">Agiza</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-sky-100">
@@ -251,7 +251,7 @@ export default function RestockAndSupplierHub({ products = [], onRefresh }) {
                                 ? 'bg-amber-100 text-amber-800 border border-amber-300'
                                 : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                             }`}>
-                              {item.status}
+                              {item.status === 'CRITICAL_STOCKOUT_RISK' ? 'Chini' : item.status === 'REORDER_NEEDED' ? 'Agiza' : 'Sawa'}
                             </span>
                           </td>
                           <td className="p-4 text-right">

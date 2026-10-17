@@ -1,7 +1,14 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import helmet from 'helmet';
 import { PrismaClient } from '@prisma/client';
+import backupRoutes from './routes/backup.routes.js';
+import syncRoutes from './routes/sync.routes.js';
+import exportRoutes from './routes/export.routes.js';
+import { startShopJobs } from './jobs/shop.job.js';
+import { upgradePlainPins } from './services/pin.service.js';
+import { syncStatus } from './services/cloudSync.service.js';
 
 import productsRoutes from './routes/products.routes.js';
 import phonesRoutes from './routes/phones.routes.js';
@@ -25,12 +32,25 @@ const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 5000;
 
-app.use(cors());
-app.use(express.json());
+const allowedOrigin = process.env.CORS_ORIGIN;
+app.use(cors(allowedOrigin ? { origin: allowedOrigin.split(',').map((item) => item.trim()), credentials: true } : undefined));
+app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }));
+app.use(express.json({ limit: '20mb' }));
 
-// API Health Check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', system: 'Phone & Accessories Management System API', version: '1.0.0' });
+app.get('/api/health', async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    const continuity = await syncStatus();
+    res.json({
+      status: 'ok',
+      system: 'PhoneVault POS',
+      version: '1.1.0',
+      database: 'sqlite',
+      continuity,
+    });
+  } catch (error) {
+    res.status(500).json({ status: 'down', database: 'sqlite', message: error.message });
+  }
 });
 
 // API Routes for Module 1, Module 2, Module 3, Module 4, Module 5, Module 6, Module 7, Module 8 & SMS
@@ -48,6 +68,9 @@ app.use('/api/forecasting', forecastingRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/sms', smsRoutes);
 app.use('/api/customers', customersRoutes);
+app.use('/api/backups', backupRoutes);
+app.use('/api/sync', syncRoutes);
+app.use('/api/exports', exportRoutes);
 
 
 // Error Handling Middleware
@@ -57,5 +80,7 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Phone Shop System API running on port ${PORT}`);
+  startShopJobs();
+  upgradePlainPins().catch((error) => console.error('PIN hash upgrade failed:', error.message));
+  console.log(`PhoneVault POS API running on port ${PORT} (SQLite shop database)`);
 });

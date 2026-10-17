@@ -1,5 +1,39 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import prisma from '../prisma.js';
+import { readUser } from '../middleware/auth.js';
+import { findUserByPin } from '../services/pin.service.js';
+import { attachDebt, saleBalance } from '../services/debt.service.js';
+import { notifySale } from '../services/sms.service.js';
+
+const pinAttempts = new Map();
+function isPinRateLimited(key) {
+  const now = Date.now();
+  const bucket = (pinAttempts.get(key) || []).filter((time) => now - time < 5 * 60 * 1000);
+  if (bucket.length >= 5) {
+    pinAttempts.set(key, bucket);
+    return true;
+  }
+  return false;
+}
+function recordFailedPin(key) {
+  const now = Date.now();
+  const bucket = (pinAttempts.get(key) || []).filter((time) => now - time < 5 * 60 * 1000);
+  bucket.push(now);
+  pinAttempts.set(key, bucket);
+}
+
+const saleInclude = {
+  items: {
+    include: {
+      product: { include: { brand: true } },
+      phoneUnit: true,
+      variant: true,
+    },
+  },
+  payments: true,
+  customer: true,
+  cashier: { select: { name: true, email: true } },
+};
+
 
 // Create Completed Sale or Proforma Invoice
 export const createSale = async (req, res) => {
@@ -19,6 +53,23 @@ export const createSale = async (req, res) => {
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: true, message: 'Cart items are required' });
+    }
+
+    const clientSaleId = req.body.clientSaleId || null;
+    const deviceId = req.body.deviceId || req.get('x-device-id') || null;
+    if (clientSaleId) {
+      const existing = await prisma.sale.findUnique({
+        where: { clientSaleId },
+        include: saleInclude,
+      });
+      if (existing) {
+        return res.status(200).json({
+          success: true,
+          idempotent: true,
+          message: 'Sale already recorded',
+          data: existing,
+        });
+      }
     }
 
     // 1. Get or Create Customer if provided
@@ -80,11 +131,16 @@ export const createSale = async (req, res) => {
           quantity: 1,
           discount: itemDiscount,
           lineTotal: effectivePrice,
+          productNameSnapshot: phoneUnit.product?.name || null,
+          imeiSnapshot: phoneUnit.imei1 || null,
         });
 
         calculatedSubtotal += lineUnitPrice;
       } else if (item.variantId) {
-        const variant = await prisma.productVariant.findUnique({ where: { id: item.variantId } });
+        const variant = await prisma.productVariant.findUnique({
+          where: { id: item.variantId },
+          include: { product: true },
+        });
         if (!variant) {
           return res.status(404).json({ error: true, message: 'Variant not found' });
         }
@@ -103,6 +159,8 @@ export const createSale = async (req, res) => {
           quantity: item.quantity,
           discount: itemDiscount,
           lineTotal: effectiveTotal,
+          productNameSnapshot: variant.product?.name || null,
+          imeiSnapshot: null,
         });
 
         calculatedSubtotal += actualPrice * item.quantity;
@@ -144,6 +202,8 @@ export const createSale = async (req, res) => {
           quantity: item.quantity,
           discount: itemDiscount,
           lineTotal: effectiveTotal,
+          productNameSnapshot: product.name,
+          imeiSnapshot: null,
         });
 
         calculatedSubtotal += lineUnitPrice * item.quantity;
@@ -152,9 +212,7 @@ export const createSale = async (req, res) => {
 
     // 3. Manager PIN Verification if required
     if (managerPin) {
-      const manager = await prisma.user.findFirst({
-        where: { pin: managerPin, role: { in: ['ADMIN', 'MANAGER'] } }
-      });
+      const manager = await findUserByPin(managerPin, { roles: ['ADMIN', 'MANAGER'] });
       if (!manager) {
         return res.status(401).json({ error: true, message: 'Invalid Manager PIN authorization code!' });
       }
@@ -171,18 +229,6 @@ export const createSale = async (req, res) => {
       for (const p of payments) {
         const amt = parseFloat(p.amount);
         totalPaid += amt;
-
-        // If Trade-In Voucher, redeem voucher
-        if (p.method === 'TRADEIN_VOUCHER' && p.referenceCode) {
-          const voucher = await prisma.tradeInVoucher.findUnique({ where: { code: p.referenceCode } });
-          if (voucher && !voucher.isRedeemed) {
-            await prisma.tradeInVoucher.update({
-              where: { id: voucher.id },
-              data: { isRedeemed: true, redeemedAt: new Date() }
-            });
-          }
-        }
-
         validatedPayments.push({
           method: p.method || 'CASH',
           amount: amt,
@@ -192,78 +238,126 @@ export const createSale = async (req, res) => {
     }
 
     const changeDue = Math.max(0, totalPaid - finalGrandTotal);
-    const invoiceNumber = `INV-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+    const balanceDue = saleBalance(finalGrandTotal, totalPaid);
+    const requestedInvoice = typeof req.body.invoiceNumber === 'string' ? req.body.invoiceNumber.trim() : '';
+    const invoiceNumber = /^[A-Za-z0-9-]{8,40}$/.test(requestedInvoice)
+      ? requestedInvoice
+      : `INV-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
 
-    // Get First Active Admin / Cashier User
-    const cashierUser = await prisma.user.findFirst();
-
-    // 6. Create Sale Record in Transaction
-    const sale = await prisma.sale.create({
-      data: {
-        invoiceNumber,
-        cashierId: cashierUser ? cashierUser.id : 'system',
-        customerId: finalCustomerId,
-        isProforma,
-        currency,
-        exchangeRate,
-        subtotal: calculatedSubtotal,
-        discountTotal: parseFloat(discountTotal),
-        discountReason: discountReason || null,
-        taxAmount: 0,
-        grandTotal: finalGrandTotal,
-        amountPaid: totalPaid,
-        changeDue,
-        status: isProforma ? 'PROFORMA_QUOTE' : 'COMPLETED',
-        items: {
-          create: validatedItems,
-        },
-        payments: {
-          create: validatedPayments,
-        },
-      },
-      include: {
-        items: {
-          include: {
-            product: { include: { brand: true } },
-            phoneUnit: true,
-            variant: true,
-          }
-        },
-        payments: true,
-        customer: true,
-        cashier: { select: { name: true, email: true } }
+    const authId = req.user?.id;
+    let cashierUser = authId ? await prisma.user.findUnique({ where: { id: authId } }) : null;
+    if (!cashierUser) {
+      const authUser = readUser(req);
+      if (authUser?.id) {
+        cashierUser = await prisma.user.findUnique({ where: { id: authUser.id } });
       }
-    });
+    }
+    if (!cashierUser) {
+      cashierUser = await prisma.user.findFirst({ where: { active: true } });
+    }
+    if (!cashierUser) {
+      return res.status(401).json({ error: true, message: 'Hakuna akaunti ya cashier iliyopatikana kwenye mfumo.' });
+    }
 
-    // 7. Update Inventory (Mark Phone IMEIs as SOLD & Reduce Accessory Stock)
-    if (!isProforma) {
-      for (const item of validatedItems) {
-        if (item.phoneUnitId) {
-          await prisma.phoneUnit.update({
-            where: { id: item.phoneUnitId },
-            data: { status: 'SOLD' }
+    // 6. Create Sale Record and Update Inventory Atomically in Prisma $transaction
+    const sale = await prisma.$transaction(async (tx) => {
+      // If Trade-In Voucher used, redeem voucher inside transaction
+      for (const p of validatedPayments) {
+        if (p.method === 'TRADEIN_VOUCHER' && p.referenceCode) {
+          const voucher = await tx.tradeInVoucher.findUnique({ where: { code: p.referenceCode } });
+          if (voucher && !voucher.isRedeemed) {
+            await tx.tradeInVoucher.update({
+              where: { id: voucher.id },
+              data: { isRedeemed: true, redeemedAt: new Date() }
+            });
+          }
+        }
+      }
+
+      const createdSale = await tx.sale.create({
+        data: {
+          invoiceNumber,
+          cashierId: cashierUser.id,
+          customerId: finalCustomerId,
+          isProforma,
+          currency,
+          exchangeRate,
+          subtotal: calculatedSubtotal,
+          discountTotal: parseFloat(discountTotal),
+          discountReason: discountReason || null,
+          taxAmount: 0,
+          grandTotal: finalGrandTotal,
+          amountPaid: totalPaid,
+          changeDue,
+          status: isProforma ? 'PROFORMA_QUOTE' : balanceDue > 0.5 ? 'PARTIAL' : 'COMPLETED',
+          clientSaleId,
+          deviceId,
+          origin: deviceId ? 'DEVICE' : 'COUNTER',
+          items: {
+            create: validatedItems,
+          },
+          payments: {
+            create: validatedPayments,
+          },
+        },
+        include: saleInclude,
+      });
+
+      // Update Inventory (Mark Phone IMEIs as SOLD & Reduce Accessory Stock)
+      if (!isProforma) {
+        for (const item of validatedItems) {
+          if (item.phoneUnitId) {
+            await tx.phoneUnit.update({
+              where: { id: item.phoneUnitId },
+              data: { status: 'SOLD' }
+            });
+          } else if (item.variantId) {
+            await tx.productVariant.update({
+              where: { id: item.variantId },
+              data: { stockQuantity: { decrement: item.quantity } }
+            });
+          } else if (item.productId) {
+            await tx.product.update({
+              where: { id: item.productId },
+              data: { stockQuantity: { decrement: item.quantity } }
+            });
+          }
+        }
+
+        // Update Customer Total Spent
+        if (finalCustomerId) {
+          await tx.customer.update({
+            where: { id: finalCustomerId },
+            data: { totalSpent: { increment: finalGrandTotal } }
           });
-        } else if (item.variantId) {
-          await prisma.productVariant.update({
-            where: { id: item.variantId },
-            data: { stockQuantity: { decrement: item.quantity } }
-          });
-        } else if (item.productId) {
-          await prisma.product.update({
-            where: { id: item.productId },
-            data: { stockQuantity: { decrement: item.quantity } }
+        }
+        if (balanceDue > 0.5) {
+          const buyer = finalCustomerId
+            ? await tx.customer.findUnique({ where: { id: finalCustomerId } })
+            : null;
+          await attachDebt(tx, {
+            saleId: createdSale.id,
+            customerId: finalCustomerId,
+            customerName: buyer?.name || customerData?.name || 'Walk-in',
+            customerPhone: buyer?.phone || customerData?.phone || '',
+            principal: balanceDue,
+            invoiceNumber,
           });
         }
       }
 
-      // Update Customer Total Spent
-      if (finalCustomerId) {
-        await prisma.customer.update({
-          where: { id: finalCustomerId },
-          data: { totalSpent: { increment: finalGrandTotal } }
-        });
-      }
+      return createdSale;
+    });
+
+    if (deviceId) {
+      await prisma.syncDevice.upsert({
+        where: { id: deviceId },
+        update: { lastSeenAt: new Date() },
+        create: { id: deviceId, label: 'Shop till' },
+      }).catch(() => {});
     }
+
+    if (!isProforma) notifySale(sale).catch(() => {});
 
     res.status(201).json({
       success: true,
@@ -279,11 +373,15 @@ export const createSale = async (req, res) => {
 export const verifyManagerPin = async (req, res) => {
   try {
     const { pin } = req.body;
-    const manager = await prisma.user.findFirst({
-      where: { pin, role: { in: ['ADMIN', 'MANAGER'] } }
-    });
+    const clientKey = req.ip || req.user?.id || 'client';
+    if (isPinRateLimited(clientKey)) {
+      return res.status(429).json({ error: true, message: 'Majaribio mengi ya PIN yasiyo sahihi. Subiri dakika 5.' });
+    }
+
+    const manager = await findUserByPin(pin, { roles: ['ADMIN', 'MANAGER'] });
 
     if (!manager) {
+      recordFailedPin(clientKey);
       return res.status(401).json({ error: true, message: 'Invalid Manager PIN authorization code!' });
     }
 
@@ -366,9 +464,23 @@ export const getReceiptPayload = async (req, res) => {
 export const manageShift = async (req, res) => {
   try {
     const { action, openingFloat, actualCash } = req.body;
-    const cashier = await prisma.user.findFirst();
+    const authId = req.user?.id;
+    const cashier = authId
+      ? await prisma.user.findUnique({ where: { id: authId } })
+      : await prisma.user.findFirst({ where: { active: true } });
+
+    if (!cashier) {
+      return res.status(401).json({ error: true, message: 'Mtumiaji wa zamu (shift) hajapatikana.' });
+    }
 
     if (action === 'OPEN') {
+      const existingOpen = await prisma.cashShift.findFirst({
+        where: { cashierId: cashier.id, status: 'OPEN' }
+      });
+      if (existingOpen) {
+        return res.json({ success: true, message: 'Una zamu iliyo wazi tayari.', data: existingOpen });
+      }
+
       const shift = await prisma.cashShift.create({
         data: {
           cashierId: cashier.id,

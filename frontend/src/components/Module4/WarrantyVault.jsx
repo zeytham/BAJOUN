@@ -203,10 +203,10 @@ export default function WarrantyVault() {
         <div className="space-y-1.5">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#80ddff]/30 text-sky-950 border border-sky-300 text-xs font-extrabold">
             <ShieldCheck className="w-4 h-4 text-sky-700 shrink-0" />
-            Module 4 Digital Warranty & Supplier RMA Vault
+            Dhamana
           </div>
           <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight leading-tight">
-            Digital Warranty Certificates & Supplier Factory Guarantee Swaps
+            Dhamana na mabadiliko ya kiwanda
           </h2>
         </div>
 
@@ -331,7 +331,7 @@ export default function WarrantyVault() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <h3 className="text-base font-extrabold text-slate-900">Active Field Warranty Certificates</h3>
-                <p className="text-xs text-slate-500">Digital warranty certificates issued at checkout in Module 2 POS Terminal.</p>
+                <p className="text-xs text-slate-500">Dhamana zilizotoka kwenye mauzo.</p>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -459,8 +459,8 @@ export default function WarrantyVault() {
         <div className="bg-white rounded-2xl border border-sky-200 overflow-hidden shadow-sm space-y-4 p-4 sm:p-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h3 className="text-base font-extrabold text-slate-900">Supplier RMA Brand New Unit Replacement Engine</h3>
-              <p className="text-xs text-slate-500">Log factory defective returns and track brand-new replacement sealed units from official brand suppliers.</p>
+              <h3 className="text-base font-extrabold text-slate-900">Mabadiliko ya kiwanda</h3>
+              <p className="text-xs text-slate-500">Rekodi iliyorudi kiwandani na kifaa kipya kilichoingia.</p>
             </div>
 
             <button
