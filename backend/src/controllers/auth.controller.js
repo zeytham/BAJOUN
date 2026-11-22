@@ -33,7 +33,9 @@ export const login = async (req, res) => {
       return res.status(429).json({ error: true, message: 'Majaribio mengi. Subiri dakika kumi.' });
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const wanted = String(email).trim().toLowerCase();
+    const user = await prisma.user.findFirst({ where: { email: wanted } })
+      || await prisma.user.findFirst({ where: { email: String(email).trim() } });
 
     if (!user) {
       return res.status(401).json({ error: true, message: 'Taarifa za kuingia sio sahihi (Invalid credentials)' });
@@ -76,6 +78,30 @@ export const login = async (req, res) => {
     return res.status(500).json({ error: true, message: error.message });
   }
 };
+
+export async function ensureDeskUser() {
+  const count = await prisma.user.count();
+  if (count > 0) {
+    const rows = await prisma.user.findMany({ select: { email: true, role: true, active: true } });
+    console.log('Desk accounts:', rows.map((row) => `${row.email} ${row.role} active=${row.active}`).join(', '));
+    return;
+  }
+  const email = String(process.env.DESK_EMAIL || '').trim().toLowerCase();
+  const password = String(process.env.DESK_PASSWORD || '');
+  if (!email || password.length < 6) {
+    console.log('No desk account yet.');
+    return;
+  }
+  await prisma.user.create({
+    data: {
+      name: 'System Admin',
+      email,
+      password: await bcrypt.hash(password, 10),
+      role: 'ADMIN',
+    },
+  });
+  console.log('Desk account created:', email);
+}
 
 /**
  * POST /api/auth/unlock-pin
