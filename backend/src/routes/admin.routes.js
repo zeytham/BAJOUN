@@ -1,5 +1,5 @@
 import express from 'express';
-import { requireRole } from '../middleware/auth.js';
+import { requireDesk } from '../middleware/auth.js';
 import {
   exportCsv,
   exportXlsx,
@@ -53,7 +53,7 @@ import {
 } from '../controllers/desk.controller.js';
 
 const router = express.Router();
-const owner = requireRole('ADMIN', 'MANAGER');
+const owner = requireDesk('ADMIN', 'MANAGER');
 
 router.get('/shop', owner, getPhoneVaultShop);
 router.get('/faces', owner, shopFaces);

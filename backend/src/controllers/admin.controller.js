@@ -4,7 +4,22 @@ import jwt from 'jsonwebtoken';
 import { tokenSecret } from '../middleware/auth.js';
 import { commitVault, readVault } from '../services/vaultReplica.service.js';
 
-function shopTarget(req) {
+function tokenOk(token) {
+  const expected = process.env.SYNC_TOKEN || '';
+  const left = Buffer.from(String(token || ''));
+  const right = Buffer.from(expected);
+  if (!expected || left.length !== right.length) return false;
+  return timingSafeEqual(left, right);
+}
+
+function sameShop(url, req) {
+  const host = url.hostname.toLowerCase();
+  const mine = String(req.hostname || '').toLowerCase();
+  const railway = String(process.env.RAILWAY_PUBLIC_DOMAIN || '').toLowerCase();
+  return host === mine || host === 'localhost' || host === '127.0.0.1' || (railway && host === railway);
+}
+
+export function shopTarget(req) {
   if (req.get('x-shop-mode') !== 'remote') return { mode: 'local' };
   const base = String(req.get('x-shop-base') || '').trim().replace(/\/$/, '');
   const token = String(req.get('x-shop-token') || '').trim();
@@ -12,7 +27,11 @@ function shopTarget(req) {
   try { url = new URL(base); } catch { return { error: 'Anwani ya duka si sahihi.' }; }
   const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && local)) return { error: 'Anwani ya duka iwe https.' };
-  if (!token) return { error: 'Weka ufunguo wa duka.' };
+  if (!token) return { error: 'Weka neno la siri la duka.' };
+  if (sameShop(url, req)) {
+    if (!tokenOk(token)) return { error: 'Neno la siri si sahihi.' };
+    return { mode: 'local' };
+  }
   return { mode: 'remote', base: url.origin, token };
 }
 

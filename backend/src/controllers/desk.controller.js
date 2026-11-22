@@ -12,6 +12,7 @@ import {
   rows,
   signStaff,
   staffSession,
+  shopTarget,
   vaultFrom,
 } from './admin.controller.js';
 
@@ -124,7 +125,7 @@ export async function checkout(req, res) {
 }
 
 export async function addStock(req, res) {
-  if (req.get('x-shop-mode') === 'remote') return res.status(400).json({ error: true, message: 'Idadi inabadilika kwenye simu.' });
+  if (shopTarget(req).mode === 'remote') return res.status(400).json({ error: true, message: 'Idadi inabadilika kwenye simu.' });
   const extra = Math.round(num(req.body?.qty));
   if (extra <= 0 || extra > 100000) return res.status(400).json({ error: true, message: 'Weka idadi unayoongeza.' });
   reply(res, await editVault(req, (vault) => {

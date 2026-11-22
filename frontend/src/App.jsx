@@ -108,27 +108,21 @@ function dayInput(date) {
    APP ROOT
 ══════════════════════════════════════════════════════════════════ */
 export default function App() {
-  const [user, setUser] = useState(() => {
-    const raw = localStorage.getItem('phonevault_user');
-    const token = localStorage.getItem('phonevault_token');
-    return raw && token ? JSON.parse(raw) : null;
-  });
   const [lang, setLang] = useState(localStorage.getItem('pv_lang') || 'sw');
   const [shopPick, setShopPick] = useState(() => sessionStorage.getItem('pv_shop'));
   const t = (text) => phrase(lang, text);
-  const screen = !user
-    ? <Gate onIn={setUser} />
-    : !shopPick
-      ? <ShopDoor onPick={(v) => { sessionStorage.setItem('pv_shop', JSON.stringify(v)); setShopPick(JSON.stringify(v)); }} />
-      : (
-        <Desk
-          user={user}
-          lang={lang}
-          onLang={setLang}
-          onOut={() => { localStorage.removeItem('phonevault_token'); localStorage.removeItem('phonevault_user'); sessionStorage.removeItem('pv_shop'); sessionStorage.removeItem('pv_staff'); setUser(null); setShopPick(null); }}
-          onSwitch={() => { sessionStorage.removeItem('pv_shop'); sessionStorage.removeItem('pv_staff'); setShopPick(null); }}
-        />
-      );
+  const leaveShop = () => { sessionStorage.removeItem('pv_shop'); sessionStorage.removeItem('pv_staff'); setShopPick(null); };
+  const screen = !shopPick
+    ? <ShopDoor onPick={(v) => { sessionStorage.setItem('pv_shop', JSON.stringify(v)); setShopPick(JSON.stringify(v)); }} />
+    : (
+      <Desk
+        user={{ name: 'Duka', role: 'ADMIN', email: '' }}
+        lang={lang}
+        onLang={setLang}
+        onOut={leaveShop}
+        onSwitch={leaveShop}
+      />
+    );
   return <LangCtx.Provider value={t}>{screen}</LangCtx.Provider>;
 }
 
@@ -222,6 +216,8 @@ function ShopDoor({ onPick }) {
   const [base, setBase] = useState('');
   const [token, setToken] = useState('');
   const [error, setError] = useState('');
+  const [showSecret, setShowSecret] = useState(false);
+  const practice = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
   function remote(e) {
     e.preventDefault();
@@ -229,7 +225,7 @@ function ShopDoor({ onPick }) {
     if (!clean.startsWith('https://') && !clean.startsWith('http://localhost') && !clean.startsWith('http://127.0.0.1')) {
       setError('Anwani ianze na https.'); return;
     }
-    if (token.trim().length < 4) { setError('Weka ufunguo wa duka kutoka kwenye simu.'); return; }
+    if (token.trim().length < 4) { setError('Weka neno la siri la duka.'); return; }
     onPick({ mode: 'remote', base: clean, token: token.trim() });
   }
 
@@ -241,53 +237,49 @@ function ShopDoor({ onPick }) {
             <div className="pv-mark" style={{ width:44, height:44, fontSize:16 }}>{t('PV')}</div>
             <div>
               <b style={{ fontSize:18 }}>{t('PhoneVault')}</b>
-              <p style={{ marginTop:2 }}>{t('Chagua aina ya duka')}</p>
+              <p style={{ marginTop:2 }}>{t('Deski ya duka')}</p>
             </div>
           </div>
           <div>
-            <h2>{t('Chagua duka')}</h2>
-            <p style={{ marginTop:10 }}>{t('Chagua duka unalotaka kusimamia.')}</p>
+            <h2>{t('Ingia dukani')}</h2>
+            <p style={{ marginTop:10 }}>{t('Weka anwani ya duka na neno la siri. Kisha PIN ya simu.')}</p>
           </div>
           <div className="pv-stage-points">
-            <span><Store size={16} />{t('Duka la mazoezi')}</span>
-            <span><Globe size={16} />{t('Duka la mtandaoni')}</span>
+            <span><Globe size={16} />{t('Anwani ya duka')}</span>
+            <span><Lock size={16} />{t('Neno la siri')}</span>
+            <span><Smartphone size={16} />{t('PIN ya simu')}</span>
           </div>
         </aside>
-        <div className="pv-stage-form">
-          <button type="button" className="pv-choice" onClick={() => onPick({ mode: 'local' })}>
+        <form className="pv-stage-form" onSubmit={remote}>
+          <div>
+            <h1>{t('Karibu tena')}</h1>
+            <p style={{ color:'#64748b', marginTop:6 }}>{t('Ingia kwenye deski ya PhoneVault')}</p>
+          </div>
+          <label className="pv-field">
+            <span>{t('Anwani ya duka')}</span>
+            <div className="pv-field-box">
+              <Globe size={16} />
+              <input value={base} onChange={(e) => setBase(e.target.value)} placeholder={t('https://duka.example.com')} />
+            </div>
+          </label>
+          <label className="pv-field">
+            <span>{t('Neno la siri')}</span>
+            <div className="pv-field-box">
+              <Lock size={16} />
+              <input type={showSecret ? 'text' : 'password'} value={token} onChange={(e) => setToken(e.target.value)} placeholder={t('Neno la siri')} />
+              <button type="button" className="pv-eye" onClick={() => setShowSecret((v) => !v)}>{showSecret ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+            </div>
+          </label>
+          {error && <Warn>{t(error)}</Warn>}
+          <button className="pv-go">{t('Ingia')}</button>
+          {practice && <button type="button" className="pv-choice" onClick={() => onPick({ mode: 'local' })}>
             <i><Store size={20} /></i>
             <span>
               <small>{t('Kompyuta hii')}</small>
               <b>{t('Duka la mazoezi')}</b>
-              <small>{t('Daftari lililo kwenye kompyuta hii. Mmiliki na zey.')}</small>
             </span>
-          </button>
-          <form onSubmit={remote} style={{ display:'flex', flexDirection:'column', gap:14 }}>
-            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-              <Globe size={18} color="#509541" />
-              <div>
-                <b>{t('Duka la mtandaoni')}</b>
-                <p style={{ color:'#64748b', fontSize:13 }}>{t('Simu ya duka')}</p>
-              </div>
-            </div>
-            <label className="pv-field">
-              <span>{t('Anwani ya duka')}</span>
-              <div className="pv-field-box">
-                <Globe size={16} />
-                <input value={base} onChange={(e) => setBase(e.target.value)} placeholder={t('https://duka.example.com')} />
-              </div>
-            </label>
-            <label className="pv-field">
-              <span>{t('Ufunguo wa duka')}</span>
-              <div className="pv-field-box">
-                <Lock size={16} />
-                <input value={token} onChange={(e) => setToken(e.target.value)} placeholder={t('Ufunguo wa duka')} />
-              </div>
-            </label>
-            {error && <Warn>{t(error)}</Warn>}
-            <button className="pv-go">{t('Ingia dukani')}</button>
-          </form>
-        </div>
+          </button>}
+        </form>
       </section>
     </main>
   );
