@@ -248,19 +248,12 @@ function ShopDoor({ onPick }) {
             </div>
           </div>
           <div>
-            <h2>{t('Ingia dukani')}</h2>
-            <p style={{ marginTop:10 }}>{t('Weka anwani ya duka na neno la siri. Kisha PIN ya simu.')}</p>
-          </div>
-          <div className="pv-stage-points">
-            <span><Globe size={16} />{t('Anwani ya duka')}</span>
-            <span><Lock size={16} />{t('Neno la siri')}</span>
-            <span><Smartphone size={16} />{t('PIN ya simu')}</span>
+            <h2 className="pv-stage-line">{t('Daftari la duka liko hapa.')}</h2>
           </div>
         </aside>
         <form className="pv-stage-form" onSubmit={remote}>
           <div>
-            <h1>{t('Karibu tena')}</h1>
-            <p style={{ color:'#64748b', marginTop:6 }}>{t('Ingia kwenye deski ya PhoneVault')}</p>
+            <h1 className="pv-hello">{t('Karibu')} <em>{t('tena')}</em></h1>
           </div>
           <label className="pv-field">
             <span>{t('Anwani ya duka')}</span>
@@ -324,6 +317,18 @@ function PinGate({ faces, error, lang, onLang, onIn, onSwitch, onOut }) {
       setMessage(err.message || 'PIN si sahihi.');
     } finally { setBusy(false); }
   }
+
+  useEffect(() => {
+    function onKey(event) {
+      const tag = event.target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if (event.key >= '0' && event.key <= '9') { event.preventDefault(); press(event.key); }
+      else if (event.key === 'Backspace') { event.preventDefault(); press('⌫'); }
+      else if (event.key === 'Enter' && pin.length === 4) { event.preventDefault(); submit(pin); }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [pin, picked, busy, selected]);
 
   function press(key) {
     if (busy) return;
@@ -407,7 +412,51 @@ function Desk({ user, lang, onLang, onOut, onSwitch }) {
   const langReady = useRef(false);
   const noticeTimer = useRef(null);
   const shopRef = useRef(null);
+  const heldRange = useRef('');
+  const forceReload = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
+
+  function periodBounds(key) {
+    const now = new Date();
+    const endDay = dayInput(now);
+    if (key === 'Leo') return [endDay, endDay];
+    if (key === 'Jana') {
+      const day = new Date(now);
+      day.setDate(day.getDate() - 1);
+      const yesterday = dayInput(day);
+      return [yesterday, yesterday];
+    }
+    if (key === 'Wiki hii') {
+      const day = new Date(now);
+      day.setDate(day.getDate() - ((day.getDay() + 6) % 7));
+      return [dayInput(day), endDay];
+    }
+    if (key === 'Mwezi huu') return [dayInput(new Date(now.getFullYear(), now.getMonth(), 1)), endDay];
+    return [`${now.getFullYear()}-01-01`, endDay];
+  }
+
+  function choosePeriod(key) {
+    const [from, to] = periodBounds(key);
+    setStart(from);
+    setEnd(to);
+  }
+
+  function setBound(which, value) {
+    if (!value) return;
+    if (which === 'start') {
+      if (end && value > end) { setStart(end); setEnd(value); return; }
+      setStart(value);
+      return;
+    }
+    if (start && value < start) { setEnd(start); setStart(value); return; }
+    setEnd(value);
+  }
+
+  function reloadShop() {
+    forceReload.current = true;
+    setRefreshing(true);
+    setTick((v) => v + 1);
+  }
 
   const saved = (text) => {
     setNotice(text);
@@ -426,6 +475,7 @@ function Desk({ user, lang, onLang, onOut, onSwitch }) {
   function lockStaff() {
     sessionStorage.removeItem('pv_staff');
     rememberRevision('');
+    heldRange.current = '';
     shopRef.current = null;
     setShop(null);
     setWho(null);
@@ -456,6 +506,9 @@ function Desk({ user, lang, onLang, onOut, onSwitch }) {
     let live = true;
     if (!shopRef.current) setLoading(true);
     else setRefreshing(true);
+    const ask = `${start}|${end}`;
+    const reuse = !forceReload.current && heldRange.current === ask && vaultRevision;
+    forceReload.current = false;
     const token = localStorage.getItem('phonevault_token');
     fetch(`/api/admin/shop?start=${start}&end=${end}`, {
       signal: ctrl.signal,
@@ -463,7 +516,7 @@ function Desk({ user, lang, onLang, onOut, onSwitch }) {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...shopHeaders(),
         ...(staffToken() ? { 'x-staff-token': staffToken() } : {}),
-        ...(vaultRevision ? { 'x-vault-revision': vaultRevision, 'x-shop-start': start, 'x-shop-end': end } : {}),
+        ...(reuse ? { 'x-vault-revision': vaultRevision, 'x-shop-start': start, 'x-shop-end': end } : {}),
       },
     })
       .then(async (res) => {
@@ -472,6 +525,7 @@ function Desk({ user, lang, onLang, onOut, onSwitch }) {
         if (!body.success) throw new Error(body.message || 'Duka halikufunguka.');
         if (!live || body.unchanged) return;
         shopRef.current = body.data;
+        heldRange.current = ask;
         rememberRevision(body.data?.revision);
         setShop(body.data);
         const code = body.data?.shop?.lang;
@@ -533,14 +587,14 @@ function Desk({ user, lang, onLang, onOut, onSwitch }) {
         {/* SIDEBAR */}
         <aside className={`pv-side${sideOpen ? ' open' : ''}`}>
           {/* Logo area */}
-          <div style={{ padding:'20px 16px 16px', borderBottom:'1px solid var(--border-subtle)', display:'flex', alignItems:'center', gap:10 }}>
+          <div style={{ padding:'20px 16px 16px', borderBottom:'1px solid rgba(255,255,255,0.1)', display:'flex', alignItems:'center', gap:10 }}>
             {shop?.shop?.logo
               ? <img src={`data:image/jpeg;base64,${shop.shop.logo}`} alt="" style={{ width:32, height:32, borderRadius:8, objectFit:'contain', background:'rgba(255,255,255,0.1)' }} />
               : <div className="pv-mark">{t('PV')}</div>
             }
             <div style={{ minWidth:0 }}>
-              <p style={{ fontWeight:800, fontSize:14, color:'#0f172a', letterSpacing:'-0.01em', lineHeight:1 }}>{t('PhoneVault')}</p>
-              <p style={{ fontSize:11, color:'var(--text-secondary)', marginTop:3, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:150 }}>
+              <p style={{ fontWeight:800, fontSize:14, color:'#f4fbf6', letterSpacing:'-0.01em', lineHeight:1 }}>{t('PhoneVault')}</p>
+              <p style={{ fontSize:11, color:'#c5e6b8', marginTop:3, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:150 }}>
                 {shop?.shop?.name || 'Duka'}
               </p>
             </div>
@@ -571,14 +625,14 @@ function Desk({ user, lang, onLang, onOut, onSwitch }) {
           </nav>
 
           {/* Bottom actions */}
-          <div style={{ padding:'12px 10px 16px', borderTop:'1px solid var(--border-subtle)', display:'flex', flexDirection:'column', gap:6 }}>
-            <button type="button" onClick={onSwitch} style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 12px', borderRadius:8, background:'rgba(15,23,42,0.04)', border:'1px solid var(--border-subtle)', color:'var(--text-secondary)', fontWeight:600, fontSize:13, width:'100%', cursor:'pointer', transition:'all .15s' }}
-              onMouseEnter={(e) => { e.currentTarget.style.background='rgba(15,23,42,0.06)'; e.currentTarget.style.color='var(--text-primary)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background='rgba(15,23,42,0.04)'; e.currentTarget.style.color='var(--text-secondary)'; }}
+          <div style={{ padding:'12px 10px 16px', borderTop:'1px solid rgba(255,255,255,0.1)', display:'flex', flexDirection:'column', gap:6 }}>
+            <button type="button" onClick={onSwitch} style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 12px', borderRadius:8, background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.12)', color:'#e7f6df', fontWeight:600, fontSize:13, width:'100%', cursor:'pointer', transition:'all .15s' }}
+              onMouseEnter={(e) => { e.currentTarget.style.background='#509541'; e.currentTarget.style.color='#fff'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background='rgba(255,255,255,0.06)'; e.currentTarget.style.color='#e7f6df'; }}
             >
               <Store size={14} />{t('Badilisha Duka')}
             </button>
-            <button type="button" onClick={lockStaff} style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 12px', borderRadius:8, background:'rgba(15,23,42,0.04)', border:'1px solid var(--border-subtle)', color:'var(--text-secondary)', fontWeight:600, fontSize:13, width:'100%', cursor:'pointer' }}>
+            <button type="button" onClick={lockStaff} style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 12px', borderRadius:8, background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.12)', color:'#e7f6df', fontWeight:600, fontSize:13, width:'100%', cursor:'pointer' }}>
               <Lock size={14} />{t('Funga')}
             </button>
             <button type="button" onClick={onOut} style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 12px', borderRadius:8, background:'rgba(248,81,73,0.06)', border:'1px solid rgba(248,81,73,0.15)', color:'var(--danger)', fontWeight:600, fontSize:13, width:'100%', cursor:'pointer', transition:'all .15s' }}
@@ -606,15 +660,19 @@ function Desk({ user, lang, onLang, onOut, onSwitch }) {
               <div className="pv-tools no-print">
                 <LangMarks lang={lang} onPick={pickLang} />
                 <div className="pv-seg">
-                  <button type="button" className={start===today && end===today ? 'on' : ''} onClick={() => { setStart(today); setEnd(today); }}>{t('Leo')}</button>
-                  <button type="button" className={start==='2026-01-01' && end===today ? 'on' : ''} onClick={() => { setStart('2026-01-01'); setEnd(today); }}>{t('Mwaka huu')}</button>
+                  {['Leo', 'Jana', 'Wiki hii', 'Mwezi huu', 'Mwaka huu'].map((key) => {
+                    const [from, to] = periodBounds(key);
+                    return (
+                      <button type="button" key={key} className={start === from && end === to ? 'on' : ''} onClick={() => choosePeriod(key)}>{t(key)}</button>
+                    );
+                  })}
                 </div>
                 <div className="pv-range">
-                  <label className="pv-date"><span>{t('Mwanzo')}</span><input type="date" value={start} onChange={(e) => setStart(e.target.value)} /></label>
+                  <label className="pv-date"><span>{t('Mwanzo')}</span><input type="date" value={start} max={end || undefined} onChange={(e) => setBound('start', e.target.value)} /></label>
                   <span style={{ color:'#7e9778', fontWeight:800 }}>–</span>
-                  <label className="pv-date"><span>{t('Mwisho')}</span><input type="date" value={end} onChange={(e) => setEnd(e.target.value)} /></label>
+                  <label className="pv-date"><span>{t('Mwisho')}</span><input type="date" value={end} min={start || undefined} onChange={(e) => setBound('end', e.target.value)} /></label>
                 </div>
-                <button type="button" className={refreshing ? 'pv-refresh spin' : 'pv-refresh'} onClick={() => setTick((v) => v + 1)} title="Onyesha upya"><RefreshCw size={16} /></button>
+                <button type="button" className={refreshing ? 'pv-refresh spin' : 'pv-refresh'} onClick={reloadShop} title={t('Onyesha upya')}><RefreshCw size={16} /></button>
                 <button type="button" onClick={onSwitch} className="lg:hidden" style={{ padding:'8px 12px', borderRadius:999, border:'1px solid #d7e8d4', background:'#fff', fontWeight:800, fontSize:12, cursor:'pointer' }}>{t('Duka')}</button>
                 <button type="button" onClick={onOut} className="lg:hidden" style={{ padding:'8px 12px', borderRadius:999, background:'#fff5f5', border:'1px solid #f3d0d0', color:'#dc2626', fontSize:12, fontWeight:800, cursor:'pointer' }}>{t('Toka')}</button>
               </div>
@@ -652,7 +710,7 @@ function Desk({ user, lang, onLang, onOut, onSwitch }) {
                   {page === 'stoo'      && <Stock shop={shop} query={query} setQuery={setQuery} onSaved={saved} start={start} end={end} />}
                   {page === 'deni'      && <Debts shop={shop} query={query} setQuery={setQuery} onSaved={saved} />}
                   {page === 'mawinga'   && <Wings rows={shop.wings} shop={shop} onSaved={saved} />}
-                  {page === 'matatizo'  && <Faults shop={shop} onSell={(line) => { setCarry(line); setPage('uza'); }} />}
+                  {page === 'matatizo'  && <Till shop={shop} faulty onSaved={saved} />}
                   {page === 'wateja'    && <Customers rows={shop.customers} sales={shop.sales} debts={shop.debts} returns={shop.returns} query={query} setQuery={setQuery} onSaved={saved} start={start} end={end} />}
                   {page === 'ripoti'    && <Report shop={shop} start={start} end={end} />}
                   {page === 'uchambuzi' && <Analysis shop={shop} />}
@@ -944,7 +1002,7 @@ function filterSales(sales, needle) {
 /* ══════════════════════════════════════════════════════════════════
    TILL (UUZAJI)
 ══════════════════════════════════════════════════════════════════ */
-function Till({ shop, carry, onCarry, onSaved }) {
+function Till({ shop, carry, onCarry, onSaved, faulty = false }) {
   const t = useT();
   const [q, setQ] = useState('');
   const [cart, setCart] = useState([]);
@@ -964,12 +1022,13 @@ function Till({ shop, carry, onCarry, onSaved }) {
   const goodsCats = (shop.categories || []).filter((row) => row.kind !== 'phone' && row.id !== 'phones');
   const phonePick = cat === 'phones' || phoneCats.some((row) => row.id === cat);
   const goods = shop.stock.filter((it) => {
-    if (it.stock <= 0 || !`${it.name} ${it.barcode}`.toLowerCase().includes(needle)) return false;
+    if (faulty ? !(it.fault > 0) : it.stock <= 0) return false;
+    if (!`${it.name} ${it.barcode}`.toLowerCase().includes(needle)) return false;
     if (!cat) return true;
     if (phonePick) return it.type === 'PHONE' && (cat === 'phones' || it.categoryId === cat);
     return it.type !== 'PHONE' && it.categoryId === cat;
   }).slice(0, 24);
-  const units = shop.units.filter((it) => it.status === 'IN_STOCK' && `${it.name} ${it.imei}`.toLowerCase().includes(needle) && (!cat || (phonePick && (cat === 'phones' || it.categoryId === cat)))).slice(0, 24);
+  const units = shop.units.filter((it) => (faulty ? it.status === 'FAULTY' : it.status === 'IN_STOCK') && `${it.name} ${it.imei}`.toLowerCase().includes(needle) && (!cat || (phonePick && (cat === 'phones' || it.categoryId === cat)))).slice(0, 24);
   const total = cart.reduce((s, l) => s + l.price * l.qty, 0);
   const payMethod = method === 'PART' ? part : method;
   const handed = payMethod === 'DENI' ? 0 : Number(amount || 0);
@@ -984,13 +1043,26 @@ function Till({ shop, carry, onCarry, onSaved }) {
   }, [carry]);
 
   function add(line) {
+    const next = faulty ? { ...line, faulty: true } : line;
     setReceipt(null);
     setCart((rows) => {
-      if (line.phoneId) return rows.some((r) => r.phoneId === line.phoneId) ? rows : [...rows, line];
-      const hit = rows.find((r) => r.productId === line.productId && !r.phoneId);
-      if (!hit) return [...rows, line];
+      if (next.phoneId) return rows.some((r) => r.phoneId === next.phoneId) ? rows : [...rows, next];
+      const hit = rows.find((r) => r.productId === next.productId && !r.phoneId);
+      if (!hit) return [...rows, next];
       return rows.map((r) => r === hit ? { ...r, qty: r.qty + 1 } : r);
     });
+  }
+
+  function takeTyped(event) {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    const code = q.trim().toLowerCase();
+    const unit = units.find((it) => String(it.imei).toLowerCase() === code) || (units.length === 1 && !goods.length ? units[0] : null);
+    const item = goods.find((it) => String(it.barcode || '').toLowerCase() === code) || (!unit && goods.length === 1 && !units.length ? goods[0] : null);
+    if (unit) add({ name: unit.name, price: unit.price, qty: 1, phoneId: unit.id, productId: '', floor: unit.floor });
+    else if (item) add({ name: item.name, price: item.price, qty: 1, productId: item.id, phoneId: '' });
+    else return;
+    setQ('');
   }
 
   async function sell(e) {
@@ -1017,7 +1089,7 @@ function Till({ shop, carry, onCarry, onSaved }) {
     <div className="pv-pos">
       <section className="pv-panel">
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
-          <p style={{ fontWeight:800 }}>{t('Stoo ya kuuza')}</p>
+          <p style={{ fontWeight:800 }}>{t(faulty ? 'Matatizo ya kuuza' : 'Stoo ya kuuza')}</p>
           <span style={{ fontSize:12, color:'var(--text-secondary)', fontWeight:700 }}>{units.length + goods.length} vinapatikana</span>
         </div>
         <div style={{ position:'relative', marginBottom:12 }}>
@@ -1025,7 +1097,7 @@ function Till({ shop, carry, onCarry, onSaved }) {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder={t('Jina, barcode, au IMEI')}
+            onKeyDown={takeTyped}
             style={{ width:'100%', paddingLeft:38, background:'#fff', border:'1px solid var(--border-default)', borderRadius:10, color:'var(--text-primary)', height:42, outline:'none', fontSize:14 }}
           />
         </div>
@@ -1138,7 +1210,7 @@ function Till({ shop, carry, onCarry, onSaved }) {
 
         {/* Inputs */}
         <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-          {payMethod !== 'DENI' && <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={t('Kiasi')} style={{ width:'100%', padding:'9px 12px', background:'var(--bg-elevated)', border:'1px solid var(--border-default)', borderRadius:9, color:'var(--text-primary)', fontSize:14, outline:'none' }} />}
+          {payMethod !== 'DENI' && <input value={amount} inputMode="decimal" onChange={(e) => setAmount(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.form?.requestSubmit(); }} placeholder={t('Kiasi')} style={{ width:'100%', padding:'9px 12px', background:'var(--bg-elevated)', border:'1px solid var(--border-default)', borderRadius:9, color:'var(--text-primary)', fontSize:14, outline:'none' }} />}
           {payMethod === 'LIPA' && <input value={lipaRef} onChange={(e) => setLipaRef(e.target.value)} placeholder={t('Kumbukumbu ya Lipa')} style={{ width:'100%', padding:'9px 12px', background:'var(--bg-elevated)', border:'1px solid var(--border-default)', borderRadius:9, color:'var(--text-primary)', fontSize:14, outline:'none' }} />}
           <input value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder={t('Jina la Mteja')} style={{ width:'100%', padding:'9px 12px', background:'var(--bg-elevated)', border:'1px solid var(--border-default)', borderRadius:9, color:'var(--text-primary)', fontSize:14, outline:'none' }} />
           <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t('Namba ya Simu')} style={{ width:'100%', padding:'9px 12px', background:'var(--bg-elevated)', border:'1px solid var(--border-default)', borderRadius:9, color:'var(--text-primary)', fontSize:14, outline:'none' }} />
@@ -1158,6 +1230,7 @@ function Till({ shop, carry, onCarry, onSaved }) {
         {error && <Warn>{error}</Warn>}
 
         <button
+          type="submit"
           disabled={!cart.length}
           style={{ background: cart.length?'var(--accent)':'rgba(128,192,80,0.2)', color: cart.length?'#fff':'rgba(128,192,80,0.4)', border:'none', borderRadius:10, padding:'13px', fontWeight:800, fontSize:15, cursor: cart.length?'pointer':'default', boxShadow: cart.length?'0 0 20px rgba(128,192,80,0.25)':'none', transition:'all .2s', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}
         >
@@ -1955,8 +2028,10 @@ function Customers({ rows, sales, debts, returns, query, setQuery, onSaved, star
         <KindTab active={scope==='all'} onClick={() => setScope('all')}>{t('Wote')}</KindTab>
         <KindTab active={scope==='owe'} onClick={() => setScope('owe')}>{t('Wenye deni')}</KindTab>
         <KindTab active={scope==='clear'} onClick={() => setScope('clear')}>{t('Bila deni')}</KindTab>
-        <KindTab active={order==='spent'} onClick={() => setOrder(order==='spent'?'name':'spent')}>{order==='spent'?'Matumizi makubwa':'A–Z'}</KindTab>
+        <KindTab active={order==='name'} onClick={() => setOrder('name')}>A–Z</KindTab>
+        <KindTab active={order==='spent'} onClick={() => setOrder('spent')}>{t('Matumizi makubwa')}</KindTab>
       </div>
+      <p style={{ fontSize:13, color:'var(--text-secondary)', fontWeight:650 }}>{order==='spent' ? t('Imeorodheshwa kwa matumizi, walioonunua zaidi juu.') : t('Imeorodheshwa kwa jina.')}</p>
 
       {fresh && (
         <form className="pv-panel" style={{ display:'grid', gridTemplateColumns:'1fr 1fr auto', gap:10 }}
@@ -2614,9 +2689,15 @@ function Notes({ rows, onSaved }) {
   const kinds = [...new Set(rows.map((r) => noteGroup(r.kind)))];
   const fresh = rows.filter((r) => !r.read).length;
   const shown = rows
-    .filter((r) => tab==='all' || (tab==='read' ? r.read : !r.read))
+    .filter((r) => tab==='all' || r.id===open || (tab==='read' ? r.read : !r.read))
     .filter((r) => !kind || noteGroup(r.kind)===kind)
     .filter((r) => `${r.title} ${r.body} ${r.kind}`.toLowerCase().includes(needle));
+  const reading = rows.find((r) => r.id === open) || null;
+
+  function openNote(note) {
+    setOpen(open === note.id ? null : note.id);
+    if (!note.read) api(`/api/admin/notes/${note.id}/read`, {}, 'POST').then(() => onSaved('Imesomwa.'));
+  }
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
@@ -2639,34 +2720,30 @@ function Notes({ rows, onSaved }) {
           <BtnDanger onClick={() => api('/api/admin/notes/clear-read',{},'POST').then(()=>onSaved('Zilizosomwa zimefutwa.'))} icon={Trash2}>{t('Futa zilizosomwa')}</BtnDanger>
         </div>
       </div>
-      <div className="pv-sheet">
-        <table>
-          <thead><tr><th>{t('Taarifa')}</th><th>{t('Aina')}</th><th>{t('Muda')}</th><th>{t('Hali')}</th><th></th></tr></thead>
-          <tbody>
-            {shown.map((r) => (
-              <Fragment key={r.id}>
-                <tr className={open===r.id?'pv-row-active':''} onClick={() => setOpen(open===r.id?null:r.id)} style={{ cursor:'pointer' }}>
-                  <td style={{ fontWeight: r.read?600:800 }}>{r.title}</td>
-                  <td>{t(noteGroup(r.kind))}</td>
-                  <td>{when(r.at)}</td>
-                  <td>{r.read?'Imesomwa':'Mpya'}</td>
-                  <td onClick={(e) => e.stopPropagation()}>
-                    <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
-                      {!r.read && <BtnPrimary onClick={() => api(`/api/admin/notes/${r.id}/read`,{},'POST').then(()=>onSaved('Imesomwa.'))}>{t('Soma')}</BtnPrimary>}
-                      {r.read && <BtnDanger onClick={() => api(`/api/admin/notes/${r.id}`,null,'DELETE').then(()=>onSaved('Taarifa imefutwa.'))} icon={Trash2}>{t('Futa')}</BtnDanger>}
-                    </div>
-                  </td>
-                </tr>
-                {open===r.id && (
-                  <tr className="pv-row-active">
-                    <td colSpan={5} style={{ whiteSpace:'pre-wrap', color:'var(--text-secondary)', lineHeight:1.6 }}>{r.body||'Hakuna maelezo.'}</td>
-                  </tr>
-                )}
-              </Fragment>
-            ))}
-            {!shown.length && <tr><td colSpan={5}>{t('Hakuna taarifa katika kichujio hiki.')}</td></tr>}
-          </tbody>
-        </table>
+      {reading && (
+        <article className="pv-panel" style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', gap:12, alignItems:'flex-start' }}>
+            <div>
+              <p style={{ fontSize:12, fontWeight:800, letterSpacing:'0.08em', textTransform:'uppercase', color:'#509541' }}>{t(noteGroup(reading.kind))}</p>
+              <h2 style={{ fontSize:22, fontWeight:800, letterSpacing:'-0.03em', marginTop:4 }}>{reading.title}</h2>
+              <p style={{ fontSize:13, color:'var(--text-secondary)', marginTop:4 }}>{when(reading.at)}</p>
+            </div>
+            <BtnGhost onClick={() => setOpen(null)}>{t('Funga')}</BtnGhost>
+          </div>
+          <p style={{ whiteSpace:'pre-wrap', lineHeight:1.7, fontSize:15 }}>{reading.body || t('Hakuna maelezo.')}</p>
+        </article>
+      )}
+      <div style={{ display:'grid', gap:10 }}>
+        {shown.map((r) => (
+          <button key={r.id} type="button" onClick={() => openNote(r)} className="pv-note" style={{ textAlign:'left', borderColor: open===r.id ? '#509541' : undefined }}>
+            <div>
+              <b>{r.title}</b>
+              <p>{t(noteGroup(r.kind))} · {when(r.at)}</p>
+            </div>
+            <span>{r.read ? t('Imesomwa') : t('Mpya')}</span>
+          </button>
+        ))}
+        {!shown.length && <p style={{ color:'var(--text-secondary)', padding:'12px 0' }}>{t('Hakuna taarifa katika kichujio hiki.')}</p>}
       </div>
     </div>
   );
