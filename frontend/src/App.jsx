@@ -217,7 +217,6 @@ function ShopDoor({ onPick }) {
   const [token, setToken] = useState('');
   const [error, setError] = useState('');
   const [showSecret, setShowSecret] = useState(false);
-  const practice = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
   function remote(e) {
     e.preventDefault();
@@ -272,13 +271,6 @@ function ShopDoor({ onPick }) {
           </label>
           {error && <Warn>{t(error)}</Warn>}
           <button className="pv-go">{t('Ingia')}</button>
-          {practice && <button type="button" className="pv-choice" onClick={() => onPick({ mode: 'local' })}>
-            <i><Store size={20} /></i>
-            <span>
-              <small>{t('Kompyuta hii')}</small>
-              <b>{t('Duka la mazoezi')}</b>
-            </span>
-          </button>}
         </form>
       </section>
     </main>
