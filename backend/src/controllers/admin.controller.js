@@ -1335,16 +1335,227 @@ export async function exportXlsx(req, res) {
     }));
   const table = reportPack(vault, range, ledger)[req.params.kind];
   if (!table) return res.status(404).json({ error: true, message: 'Ripoti haipo.' });
-  const book = new ExcelJS.Workbook();
-  const sheet = book.addWorksheet('Ripoti');
-  sheet.addRow(table.heads);
-  sheet.getRow(1).font = { bold: true };
-  for (const line of table.rows) sheet.addRow(line);
-  sheet.columns.forEach((column) => { column.width = 18; });
+  const meta = {};
+  for (const row of rows(vault, 'meta')) meta[row.key] = row.value ?? '';
+  const book = paintReport({
+    title: reportTitle(req.params.kind),
+    shop: meta.shop_name || 'PhoneVault',
+    place: meta.shop_location || '',
+    phone: meta.shop_phone || '',
+    logo: meta.shop_logo || '',
+    span: `${String(req.query.start || '').slice(0, 10)}  —  ${String(req.query.end || '').slice(0, 10)}`,
+    heads: table.heads,
+    rows: table.rows,
+    money: moneyColumns(req.params.kind),
+    chart: chartColumn(req.params.kind),
+  });
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="phonevault-${req.params.kind}.xlsx"`);
   await book.xlsx.write(res);
   res.end();
+}
+
+const REPORT_TITLES = {
+  faida: 'Ripoti ya faida',
+  mauzo: 'Ripoti ya mauzo',
+  madeni: 'Ripoti ya madeni',
+  stoo: 'Ripoti ya stoo',
+  wateja: 'Ripoti ya wateja',
+  wauzaji: 'Ripoti ya wauzaji',
+  vikundi: 'Ripoti ya vikundi',
+  ndogo: 'Ripoti ya stoo ndogo',
+  mwendo: 'Ripoti ya mwendo wa stoo',
+};
+
+function reportTitle(kind) {
+  return REPORT_TITLES[kind] || 'Ripoti ya duka';
+}
+
+function moneyColumns(kind) {
+  return {
+    faida: [7],
+    mauzo: [4, 5, 6],
+    madeni: [3, 4],
+    stoo: [4],
+    wateja: [2],
+    wauzaji: [1, 2],
+    vikundi: [1, 2],
+    ndogo: [1],
+    mwendo: [2],
+  }[kind] || [];
+}
+
+function chartColumn(kind) {
+  return {
+    faida: { name: 3, value: 7 },
+    mauzo: { name: 2, value: 4 },
+    madeni: { name: 0, value: 4 },
+    stoo: { name: 1, value: 4 },
+    wateja: { name: 0, value: 2 },
+    wauzaji: { name: 0, value: 2 },
+    vikundi: { name: 0, value: 2 },
+    ndogo: { name: 0, value: 1 },
+    mwendo: { name: 1, value: 2 },
+  }[kind] || { name: 0, value: 1 };
+}
+
+function paintReport({ title, shop, place, phone, logo, span, heads, rows, money, chart }) {
+  const book = new ExcelJS.Workbook();
+  book.creator = 'PhoneVault';
+  book.created = new Date();
+  const width = Math.max(heads.length, 6);
+  const sheet = book.addWorksheet('Ripoti', {
+    pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+    views: [{ showGridLines: false }],
+  });
+  sheet.properties.tabColor = { argb: 'FF509541' };
+  const ink = 'FF0A2E1B';
+  const green = 'FF0E3A22';
+  const leaf = 'FF509541';
+  const pale = 'FFF4FBF1';
+  const line = 'FFD7E8D4';
+  let textCol = 1;
+  if (logo) {
+    try {
+      const extension = String(logo).startsWith('iVBOR') ? 'png' : 'jpeg';
+      const image = book.addImage({ base64: logo, extension });
+      sheet.addImage(image, { tl: { col: 0.2, row: 0.2 }, ext: { width: 68, height: 68 } });
+      textCol = 3;
+    } catch { /* a broken picture still leaves the written report */ }
+  }
+  sheet.getRow(1).height = 28;
+  sheet.getRow(2).height = 20;
+  sheet.getRow(3).height = 18;
+  sheet.mergeCells(1, textCol, 1, width);
+  sheet.mergeCells(2, textCol, 2, width);
+  sheet.mergeCells(3, textCol, 3, width);
+  sheet.mergeCells(4, textCol, 4, width);
+  const nameCell = sheet.getCell(1, textCol);
+  nameCell.value = shop;
+  nameCell.font = { name: 'Calibri', size: 22, bold: true, color: { argb: green } };
+  const placeCell = sheet.getCell(2, textCol);
+  placeCell.value = [place, phone].filter(Boolean).join('    ·    ') || 'PhoneVault';
+  placeCell.font = { name: 'Calibri', size: 12, color: { argb: 'FF1F5C28' } };
+  const titleCell = sheet.getCell(3, textCol);
+  titleCell.value = title;
+  titleCell.font = { name: 'Calibri', size: 14, bold: true, color: { argb: ink } };
+  const spanCell = sheet.getCell(4, textCol);
+  spanCell.value = span;
+  spanCell.font = { name: 'Calibri', size: 11, color: { argb: 'FF4B6358' } };
+  for (let col = 1; col <= width; col += 1) {
+    for (let row = 1; row <= 4; row += 1) sheet.getCell(row, col).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF7FBF6' } };
+  }
+
+  const headerRow = 6;
+  const head = sheet.getRow(headerRow);
+  head.height = 22;
+  for (let col = 1; col <= width; col += 1) {
+    const cell = head.getCell(col);
+    cell.value = heads[col - 1] || '';
+    cell.font = { name: 'Calibri', bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: green } };
+    cell.alignment = { vertical: 'middle', horizontal: 'left' };
+  }
+  rows.forEach((line, index) => {
+    const row = sheet.getRow(headerRow + 1 + index);
+    line.forEach((value, col) => {
+      const cell = row.getCell(col + 1);
+      cell.value = typeof value === 'number' ? value : tidy(value);
+      cell.font = { name: 'Calibri', size: 11, color: { argb: ink } };
+      cell.border = { bottom: { style: 'thin', color: { argb: line } } };
+      if (index % 2 === 1) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: pale } };
+      if (typeof value === 'number') {
+        cell.numFmt = '#,##0';
+        cell.alignment = { horizontal: 'right' };
+      }
+    });
+  });
+  const totalRow = headerRow + 1 + rows.length;
+  if (rows.length) {
+    sheet.getCell(totalRow, 1).value = 'Jumla';
+    money.forEach((col) => {
+      const letter = sheet.getColumn(col + 1).letter;
+      sheet.getCell(totalRow, col + 1).value = { formula: `SUM(${letter}${headerRow + 1}:${letter}${totalRow - 1})` };
+      sheet.getCell(totalRow, col + 1).numFmt = '#,##0';
+    });
+    sheet.getRow(totalRow).eachCell((cell) => {
+      cell.font = { name: 'Calibri', bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: leaf } };
+    });
+  }
+  sheet.autoFilter = { from: { row: headerRow, column: 1 }, to: { row: headerRow, column: heads.length } };
+  sheet.views = [{ state: 'frozen', ySplit: headerRow, showGridLines: false }];
+  sheet.columns.forEach((column, index) => {
+    const sample = [heads[index] || '', ...rows.map((line) => line[index])];
+    const longest = sample.reduce((max, value) => Math.max(max, String(value ?? '').length), 10);
+    column.width = Math.min(36, Math.max(14, longest + 2));
+  });
+
+  const chartSheet = book.addWorksheet('Chati', { views: [{ showGridLines: false }] });
+  chartSheet.properties.tabColor = { argb: 'FF1F5C28' };
+  chartSheet.mergeCells('A1:C1');
+  chartSheet.getCell('A1').value = `${shop}  ·  ${title}`;
+  chartSheet.getCell('A1').font = { name: 'Calibri', size: 16, bold: true, color: { argb: green } };
+  chartSheet.getCell(2, 1).value = '#';
+  chartSheet.getCell(2, 2).value = 'Kipengele';
+  chartSheet.getCell(2, 3).value = 'Kiasi';
+  chartSheet.getRow(2).eachCell((cell) => {
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: green } };
+  });
+  const ranked = new Map();
+  for (const line of rows) {
+    const label = String(line[chart.name] ?? '').trim() || '—';
+    ranked.set(label, (ranked.get(label) || 0) + num(line[chart.value]));
+  }
+  const bars = [...ranked.entries()].sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 15);
+  bars.forEach(([label, value], index) => {
+    const row = chartSheet.getRow(3 + index);
+    row.getCell(1).value = index + 1;
+    row.getCell(2).value = label;
+    row.getCell(3).value = value;
+    row.getCell(3).numFmt = '#,##0';
+    row.getCell(1).font = { color: { argb: leaf }, bold: true };
+    if (index % 2 === 1) row.eachCell((cell) => { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: pale } }; });
+  });
+  if (bars.length) {
+    chartSheet.addConditionalFormatting({
+      ref: `C3:C${2 + bars.length}`,
+      rules: [{
+        type: 'dataBar',
+        gradient: true,
+        showValue: true,
+        cfvo: [{ type: 'min' }, { type: 'max' }],
+        color: { argb: 'FF509541' },
+      }],
+    });
+  }
+  if (rows.length) {
+    const letter = sheet.getColumn(chart.value + 1).letter;
+    sheet.addConditionalFormatting({
+      ref: `${letter}${headerRow + 1}:${letter}${headerRow + rows.length}`,
+      rules: [{
+        type: 'dataBar',
+        gradient: true,
+        showValue: true,
+        cfvo: [{ type: 'min' }, { type: 'max' }],
+        color: { argb: 'FF509541' },
+      }],
+    });
+  }
+  chartSheet.getColumn(1).width = 6;
+  chartSheet.getColumn(2).width = 36;
+  chartSheet.getColumn(3).width = 28;
+  return book;
+}
+
+function tidy(value) {
+  const text = String(value ?? '');
+  const time = Date.parse(text);
+  if (text.includes('T') && Number.isFinite(time)) {
+    return new Date(time).toLocaleString('sw-TZ', { dateStyle: 'medium', timeStyle: 'short' });
+  }
+  return text;
 }
 
 function dayBars(ledger) {

@@ -88,16 +88,16 @@ async function api(path, body, method = 'PATCH') {
   return payload;
 }
 
-async function downloadCsv(kind, start, end) {
+async function downloadExcel(kind, start, end) {
   const token = localStorage.getItem('phonevault_token');
-  const res = await fetch(`/api/admin/export/${kind}.csv?start=${start}&end=${end}`, {
+  const res = await fetch(`/api/admin/export/${kind}.xlsx?start=${start}&end=${end}`, {
     headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...shopHeaders() },
   });
-  if (!res.ok) throw new Error('Kupakua kumeshindwa.');
+  if (!res.ok) throw new Error('Excel imeshindwa.');
   const blob = await res.blob();
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
-  link.download = `phonevault-${kind}.csv`;
+  link.download = `phonevault-${kind}.xlsx`;
   link.click();
   URL.revokeObjectURL(link.href);
 }
@@ -1888,9 +1888,10 @@ function Wings({ rows, shop, onSaved }) {
   const phoneRows = phones.filter((row) => allow(row, true) && hit(row.name, row.imei, `phone:${row.id}`));
   const goodRows = goods.filter((row) => allow(row, false) && hit(row.name, row.barcode, `product:${row.id}`));
   const lines = [
-    ...phoneRows.map((row) => ({ key:`phone:${row.id}`, title:row.name, meta:fill(t('Simu · {0}'), row.imei), max:1, rank:(qty[`phone:${row.id}`] || 0) > 0 ? 0 : 1 })),
-    ...goodRows.map((row) => ({ key:`product:${row.id}`, title:row.name, meta:fill(t('Stoo {0}'), row.stock), max:Number(row.stock), rank:(qty[`product:${row.id}`] || 0) > 0 ? 0 : 1 })),
+    ...phoneRows.map((row) => ({ key:`phone:${row.id}`, kind:t('Simu'), title:row.name, meta:fill(t('Simu · {0}'), row.imei), max:1, rank:(qty[`phone:${row.id}`] || 0) > 0 ? 0 : 1 })),
+    ...goodRows.map((row) => ({ key:`product:${row.id}`, kind:t('Vifaa'), title:row.name, meta:fill(t('Stoo {0}'), row.stock), max:Number(row.stock), rank:(qty[`product:${row.id}`] || 0) > 0 ? 0 : 1 })),
   ].sort((a, b) => a.rank - b.rank || a.title.localeCompare(b.title));
+  const basket = lines.filter((line) => (qty[line.key] || 0) > 0);
 
   function setCount(key, next, max) {
     const n = Math.max(0, Math.min(max, next));
@@ -1945,28 +1946,39 @@ function Wings({ rows, shop, onSaved }) {
     : (scope === 'back' ? t('Hakuna kilichorudi.') : t('Hakuna bidhaa iliyo nje kwa sasa.'));
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-      <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'space-between', gap:10, alignItems:'flex-start' }}>
-        <div className="pv-stats" style={{ flex:1 }}>
-          <article className="pv-panel" style={{ padding:'12px 14px' }}><p style={{ fontSize:11, fontWeight:800, letterSpacing:'0.08em', textTransform:'uppercase', color:'var(--text-secondary)' }}>{t('Hawajarudi')}</p><p style={{ fontSize:22, fontWeight:800 }}>{open.length}</p></article>
-          <article className="pv-panel" style={{ padding:'12px 14px' }}><p style={{ fontSize:11, fontWeight:800, letterSpacing:'0.08em', textTransform:'uppercase', color:'var(--text-secondary)' }}>{t('Zilizorudi')}</p><p style={{ fontSize:22, fontWeight:800 }}>{backRows.length}</p></article>
-        </div>
+    <div className="pv-wing">
+      <div className="pv-wing-head">
+        <article className="pv-wing-stat warn">
+          <p>{t('Hawajarudi')}</p>
+          <strong>{open.length}</strong>
+        </article>
+        <article className="pv-wing-stat">
+          <p>{t('Zilizorudi')}</p>
+          <strong>{backRows.length}</strong>
+        </article>
         <BtnPrimary onClick={openTake} icon={Plus}>{t('Mtu amechukua')}</BtnPrimary>
       </div>
-      <div style={{ display:'flex', flexWrap:'wrap', gap:8, alignItems:'center' }}>
-        <KindTab active={scope==='out'} onClick={() => setScope('out')}>{t('Hawajarudi')}</KindTab>
-        <KindTab active={scope==='back'} onClick={() => setScope('back')}>{t('Zilizorudi')}</KindTab>
-        <KindTab active={scope==='all'} onClick={() => setScope('all')}>{t('Zote')}</KindTab>
+      <div className="pv-wing-tools">
+        <div className="pv-chips">
+          <KindTab active={scope==='out'} onClick={() => setScope('out')}>{t('Hawajarudi')}</KindTab>
+          <KindTab active={scope==='back'} onClick={() => setScope('back')}>{t('Zilizorudi')}</KindTab>
+          <KindTab active={scope==='all'} onClick={() => setScope('all')}>{t('Zote')}</KindTab>
+        </div>
         <SearchBox value={q} onChange={setQ} placeholder={t('Tafuta mtu au bidhaa')} />
       </div>
       {error && <Warn>{t(error)}</Warn>}
 
       {make && (
-        <form className="pv-pos" onSubmit={saveTake}>
-          <section className="pv-panel">
-            <p style={{ fontWeight:800, marginBottom:8 }}>{t('Tafuta jina au IMEI')}</p>
-            <SearchBox value={find} onChange={setFind} placeholder={t('Tafuta jina au IMEI')} />
-            <div className="pv-chips" style={{ margin:'12px 0' }}>
+        <form className="pv-wing-board" onSubmit={saveTake}>
+          <section className="pv-panel pv-wing-catalog">
+            <div className="pv-wing-catalog-top">
+              <div>
+                <p className="pv-wing-kicker">{t('Tafuta jina au IMEI')}</p>
+                <p className="pv-wing-count">{fill(t('{0} vinapatikana'), lines.length)}</p>
+              </div>
+              <SearchBox value={find} onChange={setFind} placeholder={t('Tafuta jina au IMEI')} />
+            </div>
+            <div className="pv-chips">
               <KindTab active={kind===''} onClick={() => setKind('')}>{t('Zote')}</KindTab>
               <KindTab active={kind==='phones'} onClick={() => setKind('phones')}>{t('Simu')}</KindTab>
               <KindTab active={kind==='goods'} onClick={() => setKind('goods')}>{t('Vifaa')}</KindTab>
@@ -1974,52 +1986,62 @@ function Wings({ rows, shop, onSaved }) {
                 <KindTab key={row.id} active={kind===row.id} secondary onClick={() => setKind(row.id)}>{row.name}</KindTab>
               ))}
             </div>
-            {chosen > 0 && <p style={{ fontWeight:700, color:'#509541', marginBottom:8 }}>{fill(t('Umechagua {0}'), chosen)}</p>}
-            <div className="pv-pos-list">
-              {!phones.length && !goods.length && <p style={{ color:'var(--text-secondary)' }}>{t('Hakuna bidhaa dukani ya kuazimisha.')}</p>}
-              {(phones.length > 0 || goods.length > 0) && !lines.length && <p style={{ color:'var(--text-secondary)' }}>{t('Hakuna bidhaa yenye neno hilo.')}</p>}
+            <div className="pv-catalog">
+              {!phones.length && !goods.length && <p className="pv-wing-empty">{t('Hakuna bidhaa dukani ya kuazimisha.')}</p>}
+              {(phones.length > 0 || goods.length > 0) && !lines.length && <p className="pv-wing-empty">{t('Hakuna bidhaa yenye neno hilo.')}</p>}
               {lines.map((line) => (
-                <div key={line.key} className={`pv-pick${(qty[line.key] || 0) > 0 ? ' on' : ''}`}>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <p style={{ fontWeight:700 }}>{line.title}</p>
-                    <p style={{ fontSize:12, color:'var(--text-secondary)' }}>{line.meta}</p>
-                  </div>
+                <article key={line.key} className={`pv-goods${(qty[line.key] || 0) > 0 ? ' on' : ''}`}>
+                  <span>{line.kind}</span>
+                  <p>{line.title}</p>
+                  <small>{line.meta}</small>
                   <Qty value={qty[line.key] || 0} max={line.max} onChange={(n) => setCount(line.key, n, line.max)} />
-                </div>
+                </article>
               ))}
             </div>
           </section>
-          <section className="pv-panel" style={{ display:'flex', flexDirection:'column', gap:10 }}>
-            <p style={{ fontWeight:800, fontSize:18 }}>{t('Mtu amechukua')}</p>
-            <p style={{ fontSize:13, color:'var(--text-secondary)' }}>{t('Andika jina, kisha tafuta bidhaa aliyochukua. Muda unaandikwa peke yake.')}</p>
+          <aside className="pv-panel pv-wing-sheet">
+            <p className="pv-wing-title">{t('Mtu amechukua')}</p>
+            <p className="pv-wing-note">{t('Andika jina, kisha tafuta bidhaa aliyochukua. Muda unaandikwa peke yake.')}</p>
             <input value={person} onChange={(e) => setPerson(e.target.value)} placeholder={t('Jina la mtu')} maxLength={60} style={inputSx} />
             <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t('Simu (si lazima)')} inputMode="tel" style={inputSx} />
             <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('Maelezo (si lazima)')} maxLength={80} style={inputSx} />
-            <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+            <div className="pv-wing-basket">
+              <p>{chosen > 0 ? fill(t('Umechagua {0}'), chosen) : t('Chagua bidhaa aliyochukua.')}</p>
+              {basket.map((line) => (
+                <div key={line.key}>
+                  <span>{line.title}</span>
+                  <b>x{qty[line.key]}</b>
+                </div>
+              ))}
+            </div>
+            <div className="pv-wing-actions">
               <BtnPrimary type="submit" icon={CheckCircle2} disabled={busy || (!phones.length && !goods.length)}>{t('Hifadhi')}</BtnPrimary>
               <BtnSecondary type="button" onClick={() => setMake(false)}>{t('Ghairi')}</BtnSecondary>
             </div>
-          </section>
+          </aside>
         </form>
       )}
 
       {back && (
-        <form onSubmit={send} className="pv-panel" style={{ display:'flex', flexDirection:'column', gap:10 }}>
-          <p style={{ fontWeight:800, fontSize:18 }}>{back.person}</p>
-          <p style={{ fontSize:13, color:'var(--text-secondary)' }}>{t('Chagua idadi anayorudisha sasa. Akirudisha kimoja, vilivyobaki vinabaki nje, na muda unaandikwa.')}</p>
-          {back.items.filter((it) => it.qty - it.back > 0).map((it) => {
-            const left = it.qty - it.back;
-            return (
-              <div key={it.id} className="pv-pick">
-                <div style={{ flex:1, minWidth:0 }}>
-                  <p style={{ fontWeight:700 }}>{it.name}</p>
-                  <p style={{ fontSize:12, color:'var(--text-secondary)' }}>{fill(t('Nje x{0}'), left)}</p>
-                </div>
-                <Qty value={Number(it.give) || 0} max={left} onChange={(n) => give(it.id, n, left)} />
-              </div>
-            );
-          })}
-          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+        <form onSubmit={send} className="pv-panel pv-wing-back">
+          <div>
+            <p className="pv-wing-title">{back.person}</p>
+            <p className="pv-wing-note">{t('Chagua idadi anayorudisha sasa. Akirudisha kimoja, vilivyobaki vinabaki nje, na muda unaandikwa.')}</p>
+          </div>
+          <div className="pv-catalog">
+            {back.items.filter((it) => it.qty - it.back > 0).map((it) => {
+              const left = it.qty - it.back;
+              return (
+                <article key={it.id} className="pv-goods on">
+                  <span>{t('Nje')}</span>
+                  <p>{it.name}</p>
+                  <small>{fill(t('Nje x{0}'), left)}</small>
+                  <Qty value={Number(it.give) || 0} max={left} onChange={(n) => give(it.id, n, left)} />
+                </article>
+              );
+            })}
+          </div>
+          <div className="pv-wing-actions">
             <BtnSecondary type="button" onClick={() => setBack((row) => ({ ...row, items: row.items.map((it) => ({ ...it, give: Math.max(0, it.qty - it.back) })) }))}>{t('Rudisha zote')}</BtnSecondary>
             <BtnPrimary type="submit" icon={RotateCcw} disabled={busy}>{t('Hifadhi kurudi')}</BtnPrimary>
             <BtnSecondary type="button" onClick={() => setBack(null)}>{t('Ghairi')}</BtnSecondary>
@@ -2027,44 +2049,51 @@ function Wings({ rows, shop, onSaved }) {
         </form>
       )}
 
-      <div className="pv-phone-grid">
+      {shown.length === 0 && <div className="pv-wing-empty">{empty}</div>}
+      <div className="pv-wing-grid">
         {shown.map((r) => {
           const away = r.status !== 'BACK';
+          const pieces = (r.items || []).reduce((sum, it) => sum + Math.max(0, it.qty - it.back), 0);
           return (
-            <article key={r.id} className="pv-panel">
-              <div style={{ display:'flex', justifyContent:'space-between', gap:8 }}>
-                <p style={{ fontWeight:800, fontSize:18 }}>{r.person}</p>
-                <span style={{ fontSize:12, fontWeight:800, color: away ? 'var(--warning)' : '#509541' }}>{away ? t('Nje') : t('Amerudi')}</span>
+            <article key={r.id} className={`pv-loan${away ? ' out' : ''}`}>
+              <header>
+                <span className="pv-avatar">{String(r.person || 'M').slice(0, 1).toUpperCase()}</span>
+                <div>
+                  <p>{r.person}</p>
+                  <small>{r.phone || t('Bila namba')}</small>
+                </div>
+                <b className={away ? 'out' : ''}>{away ? t('Nje') : t('Amerudi')}</b>
+              </header>
+              <div className="pv-loan-meta">
+                <span>{fill(t('Alichukua {0}'), when(r.at))}</span>
+                {!away && r.returnedAt && <span>{fill(t('Alirudisha {0}'), when(r.returnedAt))}</span>}
+                {r.staff && <span>{fill(t('Aliyeandika {0}'), r.staff)}</span>}
+                {away && <span>{fill(t('Nje x{0}'), pieces)}</span>}
               </div>
-              <p style={{ fontSize:13, color:'var(--text-secondary)', marginTop:4 }}>{r.phone || t('Bila namba')}</p>
-              <p style={{ fontSize:13, marginTop:6 }}>{fill(t('Alichukua {0}'), when(r.at))}</p>
-              {!away && r.returnedAt && <p style={{ fontSize:13 }}>{fill(t('Alirudisha {0}'), when(r.returnedAt))}</p>}
-              {r.staff && <p style={{ fontSize:12, color:'var(--text-secondary)' }}>{fill(t('Aliyeandika {0}'), r.staff)}</p>}
-              {r.note && <p style={{ fontSize:13, marginTop:4 }}>{r.note}</p>}
-              <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:10 }}>
+              {r.note && <p className="pv-loan-note">{r.note}</p>}
+              <div className="pv-loan-items">
                 {(r.items || []).map((it) => {
                   const left = it.qty - it.back;
+                  const done = it.qty > 0 ? Math.min(100, Math.round((it.back / it.qty) * 100)) : 0;
                   return (
-                    <div key={it.id} style={{ display:'flex', justifyContent:'space-between', gap:8 }}>
-                      <span style={{ fontWeight:650 }}>{it.name}</span>
-                      <span style={{ fontWeight:800, color:'#509541', whiteSpace:'nowrap' }}>
-                        {away && it.back > 0 && <span style={{ fontWeight:600, color:'var(--text-secondary)', marginRight:8 }}>{fill(t('Amerudi x{0}'), it.back)}</span>}
-                        {away ? (left > 0 ? fill(t('Nje x{0}'), left) : t('Imerudi')) : `x${it.qty}`}
-                      </span>
+                    <div key={it.id}>
+                      <div>
+                        <span>{it.name}</span>
+                        <b>{away ? (left > 0 ? fill(t('Nje x{0}'), left) : t('Imerudi')) : `x${it.qty}`}</b>
+                      </div>
+                      {away && it.back > 0 && <small>{fill(t('Amerudi x{0}'), it.back)}</small>}
+                      <i style={{ width:`${away ? 100 - done : 100}%` }} />
                     </div>
                   );
                 })}
               </div>
-              <div style={{ marginTop:12 }}>
-                {away
-                  ? <BtnPrimary onClick={() => { setMake(false); setBack({ id:r.id, person:r.person, items:r.items.map((it) => ({ ...it, give:0 })) }); }} icon={RotateCcw}>{t('Rudisha')}</BtnPrimary>
-                  : <BtnSecondary onClick={() => drop(r.id)}>{t('Ondoa mawinga')}</BtnSecondary>}
-              </div>
+              {away
+                ? <BtnPrimary onClick={() => { setMake(false); setBack({ id:r.id, person:r.person, items:r.items.map((it) => ({ ...it, give:0 })) }); }} icon={RotateCcw}>{t('Rudisha')}</BtnPrimary>
+                : <BtnSecondary onClick={() => drop(r.id)}>{t('Ondoa mawinga')}</BtnSecondary>}
             </article>
           );
         })}
       </div>
-      {shown.length === 0 && <p style={{ color:'var(--text-secondary)' }}>{empty}</p>}
     </div>
   );
 }
@@ -2416,7 +2445,6 @@ function Report({ shop, start, end }) {
         <SearchBox value={query} onChange={setQuery} placeholder={t('Chuja matokeo...')} />
         <div style={{ display:'flex', gap:8 }}>
           <Pakua kind={kind} start={start} end={end} />
-          <Excel kind={kind} start={start} end={end} />
         </div>
       </div>
 
@@ -3443,33 +3471,14 @@ function Block({ title, icon: Icon, rows }) {
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   EXCEL / PAKUA (Download buttons)
+   EXCEL (Download buttons)
 ══════════════════════════════════════════════════════════════════ */
-function Excel({ kind, start, end }) {
-  const t = useT();
-  const [error, setError] = useState('');
-  async function pull() {
-    const token = localStorage.getItem('phonevault_token');
-    const res = await fetch(`/api/admin/export/${kind}.xlsx?start=${start}&end=${end}`, { headers: { ...(token?{Authorization:`Bearer ${token}`}:{}), ...shopHeaders() } });
-    if (!res.ok) throw new Error('Excel imeshindwa.');
-    const blob = await res.blob(); const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob); link.download = `phonevault-${kind}.xlsx`; link.click();
-    URL.revokeObjectURL(link.href);
-  }
-  return (
-    <span>
-      <BtnPrimary onClick={() => pull().catch((err) => setError(err.message))} icon={Download}>{t('Excel')}</BtnPrimary>
-      {error && <span style={{ marginLeft:8, fontSize:12, color:'var(--warning)' }}>{error}</span>}
-    </span>
-  );
-}
-
 function Pakua({ kind, start, end }) {
   const t = useT();
   const [error, setError] = useState('');
   return (
     <span>
-      <BtnGhost onClick={() => downloadCsv(kind,start,end).catch((err) => setError(err.message))} icon={Download}>{t('Pakua CSV')}</BtnGhost>
+      <BtnPrimary onClick={() => downloadExcel(kind, start, end).catch((err) => setError(err.message))} icon={Download}>{t('Excel')}</BtnPrimary>
       {error && <span style={{ marginLeft:8, fontSize:12, color:'var(--warning)' }}>{error}</span>}
     </span>
   );

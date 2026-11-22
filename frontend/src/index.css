@@ -1148,6 +1148,66 @@ a { text-decoration: none; color: inherit; }
 .pv-cover.out { border-color: #f3d0d0; background: linear-gradient(180deg, #fff5f5 0%, #fff 48%); }
 .pv-bar { height: 6px; border-radius: 99px; background: #f4fbf1; overflow: hidden; }
 .pv-bar i { display: block; height: 100%; background: #509541; }
+.pv-wing { display: flex; flex-direction: column; gap: 16px; }
+.pv-wing-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 12px; align-items: stretch; }
+.pv-wing-stat { background: #fff; border: 1px solid #c5e0b8; border-radius: 18px; padding: 14px 16px; }
+.pv-wing-stat p { font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #3d7a32; }
+.pv-wing-stat strong { display: block; margin-top: 4px; font-size: 28px; line-height: 1; color: #0a2e1b; }
+.pv-wing-stat.warn { background: linear-gradient(180deg, #fff8ef, #fff); border-color: #ead9c4; }
+.pv-wing-stat.warn p { color: #b45309; }
+.pv-wing-head .btn, .pv-wing-head button { align-self: center; }
+.pv-wing-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.pv-wing-tools .pv-chips { flex: 1; }
+.pv-wing-board { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.7fr); gap: 16px; align-items: start; }
+.pv-wing-catalog, .pv-wing-sheet, .pv-wing-back { display: flex; flex-direction: column; gap: 12px; }
+.pv-wing-sheet { position: sticky; top: 84px; }
+.pv-wing-catalog-top { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: end; }
+.pv-wing-kicker, .pv-wing-title { font-weight: 800; font-size: 18px; color: #0a2e1b; }
+.pv-wing-count, .pv-wing-note { font-size: 13px; color: #4b6358; }
+.pv-catalog { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; max-height: 62vh; overflow: auto; padding-right: 2px; }
+.pv-goods { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 12px; border-radius: 16px; background: #f7fbf6; border: 1px solid #e3f0df; transition: border-color .15s, transform .15s, box-shadow .15s; }
+.pv-goods:hover { border-color: #509541; transform: translateY(-2px); box-shadow: 0 12px 24px rgba(20,48,28,0.06); }
+.pv-goods.on { border-color: #509541; background: #fff; box-shadow: 0 10px 22px rgba(80,149,65,0.12); }
+.pv-goods > span { align-self: flex-start; font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: #1f5c28; background: rgba(80,149,65,0.12); border-radius: 999px; padding: 3px 8px; }
+.pv-goods p { font-weight: 800; color: #0a2e1b; line-height: 1.25; }
+.pv-goods small { color: #4b6358; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv-goods .pv-qty { margin-top: 4px; justify-content: space-between; }
+.pv-wing-basket { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; background: #f4fbf1; border: 1px dashed #c5e0b8; }
+.pv-wing-basket p { font-weight: 800; color: #509541; }
+.pv-wing-basket div { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.pv-wing-basket span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv-wing-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.pv-wing-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.pv-loan { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 20px; background: #fff; border: 1px solid #c5e0b8; box-shadow: 0 16px 36px rgba(20,48,28,0.05); }
+.pv-loan.out { border-color: #ead9c4; }
+.pv-loan header { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.pv-loan header p { font-weight: 800; font-size: 17px; color: #0a2e1b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv-loan header small { color: #4b6358; }
+.pv-loan header b { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: #1f5c28; background: #e7f6df; border-radius: 999px; padding: 5px 9px; }
+.pv-loan header b.out { color: #9a3412; background: #ffedd5; }
+.pv-loan-meta { display: flex; flex-wrap: wrap; gap: 6px; }
+.pv-loan-meta span { background: #f7fbf6; border: 1px solid #e3f0df; border-radius: 999px; padding: 4px 8px; font-size: 12px; color: #1f5c28; }
+.pv-loan-note { font-size: 13px; color: #0a2e1b; background: #f7fbf6; border-radius: 12px; padding: 8px 10px; }
+.pv-loan-items { display: flex; flex-direction: column; gap: 8px; }
+.pv-loan-items > div { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: 12px; background: #f7fbf6; }
+.pv-loan-items > div > div { display: flex; justify-content: space-between; gap: 8px; }
+.pv-loan-items span { font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv-loan-items b { color: #509541; white-space: nowrap; }
+.pv-loan-items small { color: #4b6358; font-size: 11px; }
+.pv-loan-items i { display: block; height: 4px; border-radius: 99px; background: #509541; }
+.pv-loan > button { width: 100%; justify-content: center; }
+.pv-wing-empty { grid-column: 1 / -1; padding: 28px 12px; text-align: center; color: #4b6358; background: #fff; border: 1px dashed #c5e0b8; border-radius: 16px; }
+@media (max-width: 980px) {
+  .pv-wing-head, .pv-wing-board { grid-template-columns: 1fr; }
+  .pv-wing-head > button { width: 100%; justify-content: center; }
+  .pv-wing-sheet { position: static; }
+  .pv-catalog { max-height: none; }
+}
+@media (max-width: 640px) {
+  .pv-wing-grid, .pv-catalog { grid-template-columns: 1fr; }
+  .pv-loan header { grid-template-columns: auto minmax(0, 1fr); }
+  .pv-loan header b { grid-column: 1 / -1; justify-self: start; }
+}
 @media (max-width: 980px) {
   .pv-pos, .pv-stats { grid-template-columns: 1fr; }
   .pv-pos-list { max-height: none; }
