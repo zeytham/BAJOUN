@@ -1,7 +1,7 @@
 import express from 'express';
 import prisma from '../prisma.js';
 import { ingestRemoteSale, pushUnsyncedSales, syncStatus } from '../services/cloudSync.service.js';
-import { readVault, writeVault } from '../services/vaultReplica.service.js';
+import { readVault, watchVault, writeVault } from '../services/vaultReplica.service.js';
 import { requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -28,6 +28,13 @@ router.post('/push', requireRole('ADMIN', 'MANAGER'), async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: true, message: error.message });
   }
+});
+
+router.get('/vault/head', async (req, res) => {
+  if (!syncTokenOk(req)) return res.status(401).json({ error: true, message: 'Sync token is not valid' });
+  const since = Number(req.query.since);
+  const revision = Number.isFinite(since) ? await watchVault(since) : (Number(readVault().revision) || 0);
+  res.json({ success: true, data: { revision } });
 });
 
 router.get('/vault', (req, res) => {

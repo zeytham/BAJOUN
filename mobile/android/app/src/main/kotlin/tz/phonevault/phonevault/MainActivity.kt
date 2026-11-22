@@ -27,6 +27,18 @@ class MainActivity : FlutterActivity() {
                         }
                         result.success(null)
                     }
+                    "chat" -> {
+                        val phone = call.argument<String>("phone") ?: ""
+                        val text = call.argument<String>("text") ?: ""
+                        if (phone.length < 11) {
+                            result.success(false)
+                            return@setMethodCallHandler
+                        }
+                        val encoded = java.net.URLEncoder.encode(text, "UTF-8")
+                        val uri = android.net.Uri.parse("https://wa.me/$phone?text=$encoded")
+                        val opened = openChat("com.whatsapp", uri) || openChat("com.whatsapp.w4b", uri) || openChat(null, uri)
+                        result.success(opened)
+                    }
                     "whatsapp" -> {
                         val phone = call.argument<String>("phone") ?: ""
                         val path = call.argument<String>("path") ?: ""
@@ -40,7 +52,8 @@ class MainActivity : FlutterActivity() {
                             "$packageName.fileprovider",
                             file,
                         )
-                        val opened = openWhatsapp("com.whatsapp", phone, uri) || openWhatsapp("com.whatsapp.w4b", phone, uri)
+                        val mime = if (path.endsWith(".png", true)) "image/png" else "application/pdf"
+                        val opened = openWhatsapp("com.whatsapp", phone, uri, mime) || openWhatsapp("com.whatsapp.w4b", phone, uri, mime)
                         result.success(opened)
                     }
                     else -> result.notImplemented()
@@ -48,11 +61,24 @@ class MainActivity : FlutterActivity() {
             }
     }
 
-    private fun openWhatsapp(packageName: String, phone: String, uri: android.net.Uri): Boolean {
+    private fun openChat(packageName: String?, uri: android.net.Uri): Boolean {
+        return try {
+            val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+                if (packageName != null) setPackage(packageName)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(intent)
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun openWhatsapp(packageName: String, phone: String, uri: android.net.Uri, mime: String): Boolean {
         return try {
             grantUriPermission(packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
             val intent = Intent(Intent.ACTION_SEND).apply {
-                type = "application/pdf"
+                type = mime
                 setPackage(packageName)
                 putExtra(Intent.EXTRA_STREAM, uri)
                 putExtra("jid", "$phone@s.whatsapp.net")

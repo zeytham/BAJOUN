@@ -1,15 +1,17 @@
 import 'dart:async';
 
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
+import '../lang.dart';
 import '../money.dart';
 import '../screen_guard.dart';
 import '../shop_store.dart';
 import '../theme.dart';
 import '../widgets/ui.dart';
 import 'alerts_page.dart';
+import 'faults_page.dart';
 import 'history_page.dart';
+import 'wings_page.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({
@@ -26,45 +28,13 @@ class HomePage extends StatelessWidget {
     return ListenableBuilder(
       listenable: store,
       builder: (context, _) {
-        final series = store.trend(7);
+        final out = store.wings.where((row) => row['status'] == 'OUT').toList();
         return Scaffold(
           backgroundColor: skyPage,
           body: ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
             children: [
               const _LiveDate(),
-              if (store.seeDebts && store.dueReminders().isNotEmpty) ...[
-                const SizedBox(height: 12),
-                for (final debt in store.dueReminders())
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('${debt['customer_name']}', style: const TextStyle(fontWeight: FontWeight.w600, color: ink)),
-                          const SizedBox(height: 4),
-                          Text('Deni ${tsh(asDouble(debt['balance']))} limekaa siku 30 bila malipo.', style: captionStyle),
-                          const SizedBox(height: 8),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: FilledButton(
-                              onPressed: () async {
-                                final error = await store.sendDebtReminder(debt);
-                                if (!context.mounted) return;
-                                toast(context, error ?? 'WhatsApp imefunguka kwa namba hii. Bonyeza Tuma.');
-                              },
-                              child: const Text('Tuma ukumbusho'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
               const SizedBox(height: 14),
               Row(
                 children: [
@@ -80,7 +50,7 @@ class HomePage extends StatelessWidget {
                     ),
                   ),
                   IconButton(
-                    tooltip: 'Taarifa',
+                    tooltip: tx('Taarifa', 'Alerts'),
                     onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AlertsPage(store: store))),
                     icon: Badge(
                       isLabelVisible: store.unread > 0,
@@ -94,10 +64,12 @@ class HomePage extends StatelessWidget {
               LayoutBuilder(
                 builder: (context, constraints) {
                   final actions = <(IconData, String, VoidCallback)>[
-                    (Icons.point_of_sale, 'Uza', () => goTab(1)),
-                    if (store.seeStock) (Icons.inventory_2_outlined, 'Stoo', () => goTab(2)),
-                    if (store.seeDebts) (Icons.account_balance_wallet_outlined, 'Deni', () => goTab(3)),
-                    (Icons.receipt_long, 'Historia', () => _open(context, HistoryPage(store: store))),
+                    (Icons.point_of_sale, tx('Uza', 'Sell'), () => goTab(1)),
+                    if (store.seeStock) (Icons.inventory_2_outlined, tx('Stoo', 'Stock'), () => goTab(2)),
+                    if (store.seeDebts) (Icons.account_balance_wallet_outlined, tx('Deni', 'Debt'), () => goTab(3)),
+                    (Icons.outbound, tx('Mawinga', 'Out'), () => _open(context, WingsPage(store: store))),
+                    (Icons.report_gmailerrorred_outlined, tx('Matatizo', 'Faults'), () => _open(context, FaultsPage(store: store))),
+                    (Icons.receipt_long, tx('Historia', 'History'), () => _open(context, HistoryPage(store: store))),
                   ];
                   final width = (constraints.maxWidth - 10) / 2;
                   return Wrap(
@@ -126,51 +98,31 @@ class HomePage extends StatelessWidget {
                   );
                 },
               ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                decoration: vaultCard(),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(store.seeAllSales ? 'Mauzo ya siku 7' : 'Mauzo yangu, siku 7', style: sectionStyle),
-                    const SizedBox(height: 4),
-                    Text('Leo ${tsh(store.todayTotal)} · risiti ${store.todayCount}', style: captionStyle),
-                    SizedBox(
-                      height: 140,
-                      child: LineChart(
-                        LineChartData(
-                          minY: 0,
-                          maxY: series.totals.every((value) => value == 0) ? 1 : null,
-                          gridData: const FlGridData(show: false),
-                          borderData: FlBorderData(show: false),
-                          titlesData: const FlTitlesData(show: false),
-                          lineTouchData: LineTouchData(
-                            touchTooltipData: LineTouchTooltipData(
-                              getTooltipItems: (spots) => [
-                                for (final spot in spots) LineTooltipItem(tsh(spot.y), const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                              ],
-                            ),
-                          ),
-                          lineBarsData: [
-                            LineChartBarData(
-                              spots: [for (var i = 0; i < series.totals.length; i++) FlSpot(i.toDouble(), series.totals[i])],
-                              isCurved: true,
-                              color: skyDeep,
-                              barWidth: 3,
-                              dotData: const FlDotData(show: false),
-                              belowBarData: BarAreaData(show: true, color: sky.withValues(alpha: 0.45)),
-                            ),
-                          ],
-                        ),
-                        duration: const Duration(milliseconds: 450),
+              if (out.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(tx('Mawinga bado nje', 'Items still out'), style: sectionStyle),
+                      const SizedBox(height: 4),
+                      Text('${out.length} ${out.length == 1 ? tx('mtu haja rudisha bidhaa.', 'person has not brought items back.') : tx('watu hawajarudisha bidhaa.', 'people have not brought items back.')}', style: captionStyle),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(onPressed: () => _open(context, WingsPage(store: store)), child: Text(tx('Fungua', 'Open'))),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              _SensitiveCard(store: store),
+              ],
+              if (store.isOwner) ...[
+                const SizedBox(height: 8),
+                _SensitiveCard(store: store),
+              ],
             ],
           ),
         );
@@ -232,7 +184,10 @@ class _SensitiveCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final open = store.isOwner && store.revealSensitive;
-    String hidden(String value) => open ? value : '••••••';
+    final drawer = store.dayDrawer();
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, now.day);
+    final book = store.ledgerBetween(start, start.add(const Duration(days: 1)));
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -245,7 +200,7 @@ class _SensitiveCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Expanded(child: Text('Taarifa nyeti', style: sectionStyle)),
+              Expanded(child: Text(tx('Taarifa nyeti', 'Private figures'), style: sectionStyle)),
               if (store.isOwner)
                 IconButton(
                   onPressed: () {
@@ -256,39 +211,134 @@ class _SensitiveCard extends StatelessWidget {
                 ),
             ],
           ),
-          Text('Thamani ya stoo', style: captionStyle),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(hidden(tsh(store.retailValue)), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 22, color: ink)),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(child: _cell('Faida ya leo', hidden(store.isOwner ? tsh(store.todayProfit) : '—'))),
-              const SizedBox(width: 12),
-              Expanded(child: _cell('Gharama ya stoo', hidden(store.isOwner ? tsh(store.costValue) : '—'))),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _cell('Simu zilizopo', hidden('${store.phonesInStock}')),
+          if (open) ...[
+            _hero(t('Pesa iliyoingia leo'), tsh(drawer.total)),
+            const SizedBox(height: 8),
+            _line(t('Cash mauzo'), tsh(drawer.cashSales)),
+            _line(t('Cash madeni'), tsh(drawer.cashDebts)),
+            _line(t('Lipa Namba'), tsh(drawer.lipa)),
+            _line(t('Pesa zilizorudishwa'), tsh(drawer.refunds)),
+            const SizedBox(height: 16),
+            _hero(tx('Thamani ya stoo', 'Stock value'), tsh(store.retailValue)),
+            const SizedBox(height: 8),
+            _line(tx('Faida ya leo', 'Profit today'), tsh(book.shopProfit)),
+            _line(tx('Faida ya simu', 'Phone profit'), tsh(book.phoneProfit)),
+            _line(tx('Faida ya vifaa', 'Accessory profit'), tsh(book.goodsProfit)),
+            _line(tx('Faida ya matatizo', 'Fault profit'), tsh(book.faultProfit)),
+            _line(tx('Mtaji wa simu', 'Phone capital'), tsh(store.phoneCapital)),
+            _line(tx('Mtaji wa vifaa', 'Accessory capital'), tsh(store.goodsCapital)),
+            _line(tx('Simu zilizopo', 'Phones in stock'), '${store.phonesInStock}'),
+          ] else ...[
+            Text(t('Pesa iliyoingia leo'), style: captionStyle),
+            _dots(22),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(child: _mask(t('Cash mauzo'))),
+                const SizedBox(width: 12),
+                Expanded(child: _mask(t('Cash madeni'))),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(child: _mask(t('Lipa Namba'))),
+                const SizedBox(width: 12),
+                Expanded(child: _mask(t('Pesa zilizorudishwa'))),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(tx('Thamani ya stoo', 'Stock value'), style: captionStyle),
+            _dots(22),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(child: _mask(tx('Faida ya leo', 'Profit today'))),
+                const SizedBox(width: 12),
+                Expanded(child: _mask(tx('Faida ya simu', 'Phone profit'))),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(child: _mask(tx('Faida ya vifaa', 'Accessory profit'))),
+                const SizedBox(width: 12),
+                Expanded(child: _mask(tx('Faida ya matatizo', 'Fault profit'))),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(child: _mask(tx('Mtaji wa simu', 'Phone capital'))),
+                const SizedBox(width: 12),
+                Expanded(child: _mask(tx('Mtaji wa vifaa', 'Accessory capital'))),
+              ],
+            ),
+            const SizedBox(height: 10),
+            _mask(tx('Simu zilizopo', 'Phones in stock')),
+          ],
         ],
       ),
     );
   }
 
-  Widget _cell(String label, String value) {
+  Widget _mask(String label) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: captionStyle),
-        const SizedBox(height: 2),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: ink)),
-        ),
+        Text(label, maxLines: 2, overflow: TextOverflow.ellipsis, style: captionStyle),
+        const SizedBox(height: 4),
+        _dots(16),
       ],
+    );
+  }
+
+  Widget _dots(double size) {
+    final dot = size * 0.34;
+    return SizedBox(
+      height: size * 1.25,
+      child: Row(
+        children: [
+          for (var i = 0; i < 6; i++) ...[
+            Container(
+              width: dot,
+              height: dot,
+              decoration: const BoxDecoration(color: Color(0xFF7E9778), shape: BoxShape.circle),
+            ),
+            if (i < 5) SizedBox(width: dot * 0.7),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _hero(String label, String value) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(color: skyPage, borderRadius: BorderRadius.circular(18)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 13, height: 1.2, fontWeight: FontWeight.w600, color: muted)),
+          const SizedBox(height: 8),
+          Text(value, style: const TextStyle(fontSize: 28, height: 1.15, fontWeight: FontWeight.w800, color: skyDeep, letterSpacing: -0.3)),
+        ],
+      ),
+    );
+  }
+
+  Widget _line(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 11),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(child: Text(label, style: const TextStyle(fontSize: 15, height: 1.25, fontWeight: FontWeight.w600, color: ink))),
+          const SizedBox(width: 16),
+          Text(value, textAlign: TextAlign.right, style: const TextStyle(fontSize: 16, height: 1.2, fontWeight: FontWeight.w700, color: ink)),
+        ],
+      ),
     );
   }
 }

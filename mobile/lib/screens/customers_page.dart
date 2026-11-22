@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../lang.dart';
 import '../money.dart';
 import '../shop_store.dart';
 import '../theme.dart';
@@ -31,7 +32,7 @@ class _CustomersPageState extends State<CustomersPage> {
       listenable: store,
       builder: (context, _) {
         if (!store.seeCustomers) {
-          return const Scaffold(backgroundColor: skyPage, body: LockedNote(title: 'Wateja'));
+          return Scaffold(backgroundColor: skyPage, body: LockedNote(title: t('Wateja')));
         }
         final people = store.customers.where((row) {
           final blob = '${row['name']} ${row['phone']}'.toLowerCase();
@@ -39,13 +40,13 @@ class _CustomersPageState extends State<CustomersPage> {
         }).toList();
         return Scaffold(
           backgroundColor: skyPage,
-          appBar: AppBar(title: const Text('Wateja', style: TextStyle(fontWeight: FontWeight.w600))),
+          appBar: AppBar(title: Text(tx('Wateja', 'Customers'), style: const TextStyle(fontWeight: FontWeight.w600))),
           floatingActionButton: FloatingActionButton.extended(
             backgroundColor: skyDeep,
             foregroundColor: Colors.white,
             onPressed: _add,
             icon: const Icon(Icons.person_add_alt),
-            label: const Text('Mteja'),
+            label: Text(t('Mteja')),
           ),
           body: ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
@@ -55,19 +56,29 @@ class _CustomersPageState extends State<CustomersPage> {
                 maxLength: 40,
                 inputFormatters: [LengthLimitingTextInputFormatter(40)],
                 onChanged: (value) => setState(() => _query = value.trim().toLowerCase()),
-                decoration: const InputDecoration(hintText: 'Tafuta jina au simu', prefixIcon: Icon(Icons.search), counterText: ''),
+                decoration: InputDecoration(hintText: t('Tafuta jina au simu'), prefixIcon: Icon(Icons.search), counterText: ''),
               ),
               const SizedBox(height: 12),
-              if (people.isEmpty) const EmptyHint(text: 'Hakuna mteja bado. Wanaandikwa pia ukiuza kwa jina na simu.'),
+              if (people.isEmpty) EmptyHint(text: t('Hakuna mteja.')),
               for (final person in people)
                 Card(
                   elevation: 0,
                   color: Colors.white,
                   child: ListTile(
                     title: Text('${person['name']}', style: const TextStyle(fontWeight: FontWeight.w600)),
-                    subtitle: Text(showPhone('${person['phone'] ?? ''}').isEmpty ? 'Hakuna simu' : showPhone('${person['phone']}')),
-                    trailing: Text(tsh(asDouble(person['spent'])), style: const TextStyle(fontWeight: FontWeight.w600, color: skyDeep)),
-                    onTap: () => _detail(person),
+                    subtitle: Text(
+                      '${showPhone('${person['phone'] ?? ''}').isEmpty ? t('Hakuna simu') : showPhone('${person['phone']}')}\n${tsh(asDouble(person['spent']))}',
+                      style: const TextStyle(height: 1.35),
+                    ),
+                    isThreeLine: true,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(tooltip: t('Angalia'), onPressed: () => _open(person), icon: const Icon(Icons.person_outline, color: skyDeep)),
+                        IconButton(tooltip: t('Futa'), onPressed: () => _remove(person), icon: const Icon(Icons.delete_outline, color: Color(0xFFDC2626))),
+                      ],
+                    ),
+                    onTap: () => _open(person),
                   ),
                 ),
             ],
@@ -80,80 +91,105 @@ class _CustomersPageState extends State<CustomersPage> {
   Future<void> _add() async {
     final values = await showDialog<List<String>>(
       context: context,
-      builder: (context) => const FieldDialog(
-        title: 'Mteja mpya',
-        confirm: 'Hifadhi',
+      builder: (context) => FieldDialog(
+        title: t('Mteja mpya'),
+        confirm: t('Hifadhi'),
         fields: [
-          DialogField('Jina', maxLength: 40),
-          DialogField('Simu', phone: true),
+          DialogField(t('Jina'), maxLength: 40),
+          DialogField(t('Simu'), phone: true),
         ],
       ),
     );
-    if (values == null || !mounted) return;
+    if (!mounted) return;
+    if (values == null) {
+      toast(context, t('Imesitishwa.'));
+      return;
+    }
     final error = await widget.store.addCustomer(values[0], values[1]);
     if (error != null && mounted) toast(context, error);
   }
 
-  void _detail(Map<String, Object?> person) {
-    final name = '${person['name']}';
-    final phone = '${person['phone']}';
-    final debts = widget.store.debts.where((row) => row['customer_phone'] == phone || row['customer_name'] == name);
-    final sales = widget.store.sales.where((row) => row['customer_phone'] == phone || row['customer_name'] == name);
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(16),
-        child: ListView(
-          children: [
-            Text(name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600)),
-            Text(showPhone(phone).isEmpty ? 'Hakuna simu' : showPhone(phone), style: const TextStyle(color: muted)),
-            const SizedBox(height: 8),
-            Text('Manunuzi ${tsh(asDouble(person['spent']))}', style: const TextStyle(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 12),
-            const Text('Madeni', style: TextStyle(fontWeight: FontWeight.w600)),
-            if (debts.isEmpty) const Text('Hana deni.', style: TextStyle(color: muted)),
-            for (final debt in debts)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(tsh(asDouble(debt['balance']))),
-                subtitle: Text('${debt['status']} · ${formatWhen('${debt['opened_at']}')}'),
-              ),
-            const Text('Risiti', style: TextStyle(fontWeight: FontWeight.w600)),
-            for (final sale in sales.take(8))
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text('${sale['invoice']}'),
-                subtitle: Text(formatWhen('${sale['created_at']}')),
-                trailing: Text(tsh(asDouble(sale['total']))),
-              ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _remove(person);
-                },
-                child: const Text('Futa mteja', style: TextStyle(color: Color(0xFFDC2626))),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  void _open(Map<String, Object?> person) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => _CustomerFile(store: widget.store, person: person)));
   }
 
   Future<void> _remove(Map<String, Object?> person) async {
     final ok = await confirm(
       context,
-      'Futa ${person['name']}',
-      'Jina litaondoka kwenye orodha. Risiti, madeni na ripoti za zamani zinabaki.',
+      tf('Futa {0}', ["${person['name']}"]),
+      t('Jina litaondoka kwenye orodha. Risiti, madeni na ripoti za zamani zinabaki.'),
     );
     if (!ok || !mounted) return;
     final error = await widget.store.deleteCustomer('${person['id']}');
     if (!mounted) return;
-    toast(context, error ?? 'Mteja amefutwa.');
+    toast(context, error ?? t('Mteja amefutwa.'));
+  }
+}
+
+class _CustomerFile extends StatelessWidget {
+  const _CustomerFile({required this.store, required this.person});
+  final ShopStore store;
+  final Map<String, Object?> person;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = '${person['name']}';
+    final phone = '${person['phone']}';
+    return ListenableBuilder(
+      listenable: store,
+      builder: (context, _) {
+        final debts = store.debts.where((row) => '${row['customer_phone']}' == phone || '${row['customer_name']}' == name).toList();
+        final sales = store.sales.where((row) => '${row['customer_phone']}' == phone || '${row['customer_name']}' == name).toList();
+        return Scaffold(
+          backgroundColor: skyPage,
+          appBar: AppBar(title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600))),
+          body: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: vaultCard(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(showPhone(phone).isEmpty ? t('Hakuna simu') : showPhone(phone), style: const TextStyle(color: muted)),
+                    const SizedBox(height: 8),
+                    Text(tf('Manunuzi {0}', [tsh(asDouble(person['spent']))]), style: const TextStyle(fontWeight: FontWeight.w800, color: skyDeep, fontSize: 20)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(t('Madeni'), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              const SizedBox(height: 8),
+              if (debts.isEmpty) EmptyHint(text: t('Hana deni.')),
+              for (final debt in debts)
+                Card(
+                  elevation: 0,
+                  color: Colors.white,
+                  child: ListTile(
+                    title: Text(tsh(asDouble(debt['balance'])), style: const TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: Text('${debtState('${debt['status']}')} · ${formatWhen('${debt['opened_at']}')}'),
+                  ),
+                ),
+              const SizedBox(height: 12),
+              Text(t('Risiti'), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              const SizedBox(height: 8),
+              if (sales.isEmpty) EmptyHint(text: t('Hakuna kumbukumbu.')),
+              for (final sale in sales)
+                Card(
+                  elevation: 0,
+                  color: Colors.white,
+                  child: ListTile(
+                    title: Text('${sale['invoice']}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: Text('${formatWhen('${sale['created_at']}')} · ${methodLabel('${sale['method']}')}'),
+                    trailing: Text(tsh(asDouble(sale['total'])), style: const TextStyle(fontWeight: FontWeight.w700, color: skyDeep)),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }

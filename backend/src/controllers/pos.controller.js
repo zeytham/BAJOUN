@@ -34,6 +34,19 @@ const saleInclude = {
   cashier: { select: { name: true, email: true } },
 };
 
+async function cashierFromSession(req) {
+  const authId = req.user?.id;
+  if (authId) {
+    const bySession = await prisma.user.findUnique({ where: { id: authId } });
+    if (bySession) return bySession;
+  }
+  const authUser = readUser(req);
+  if (authUser?.id && authUser.id !== authId) {
+    return prisma.user.findUnique({ where: { id: authUser.id } });
+  }
+  return null;
+}
+
 
 // Create Completed Sale or Proforma Invoice
 export const createSale = async (req, res) => {
@@ -244,19 +257,12 @@ export const createSale = async (req, res) => {
       ? requestedInvoice
       : `INV-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
 
-    const authId = req.user?.id;
-    let cashierUser = authId ? await prisma.user.findUnique({ where: { id: authId } }) : null;
+    const cashierUser = await cashierFromSession(req);
     if (!cashierUser) {
-      const authUser = readUser(req);
-      if (authUser?.id) {
-        cashierUser = await prisma.user.findUnique({ where: { id: authUser.id } });
-      }
-    }
-    if (!cashierUser) {
-      cashierUser = await prisma.user.findFirst({ where: { active: true } });
-    }
-    if (!cashierUser) {
-      return res.status(401).json({ error: true, message: 'Hakuna akaunti ya cashier iliyopatikana kwenye mfumo.' });
+      return res.status(401).json({
+        error: true,
+        message: 'Hakuna cashier aliyethibitishwa kwenye kikao hiki. Tafadhali ingia upya kwenye mfumo.',
+      });
     }
 
     // 6. Create Sale Record and Update Inventory Atomically in Prisma $transaction
@@ -500,13 +506,13 @@ export const getReceiptPayload = async (req, res) => {
 export const manageShift = async (req, res) => {
   try {
     const { action, openingFloat, actualCash } = req.body;
-    const authId = req.user?.id;
-    const cashier = authId
-      ? await prisma.user.findUnique({ where: { id: authId } })
-      : await prisma.user.findFirst({ where: { active: true } });
+    const cashier = await cashierFromSession(req);
 
     if (!cashier) {
-      return res.status(401).json({ error: true, message: 'Mtumiaji wa zamu (shift) hajapatikana.' });
+      return res.status(401).json({
+        error: true,
+        message: 'Hakuna cashier aliyethibitishwa kwenye kikao hiki. Tafadhali ingia upya kwenye mfumo.',
+      });
     }
 
     if (action === 'OPEN') {

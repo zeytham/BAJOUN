@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../lang.dart';
+import '../date_span.dart';
 import '../money.dart';
 import '../shop_store.dart';
 import '../theme.dart';
@@ -18,21 +20,21 @@ class ReportsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!store.seeReports) {
-      return const Scaffold(backgroundColor: skyPage, body: LockedNote(title: 'Ripoti'));
+      return Scaffold(backgroundColor: skyPage, body: LockedNote(title: t('Ripoti')));
     }
     final reports = <_Report>[
-      _Report('Mauzo', () async => store.csvSales()),
-      if (store.seeDebts) _Report('Madeni', () async => store.csvDebts()),
+      _Report('Mauzo', () async => store.csvSales(), dateColumn: 1),
+      if (store.seeDebts) _Report('Madeni', () async => store.csvDebts(), debt: true),
       if (store.seeStock) _Report('Stoo', () async => store.csvStock()),
       if (store.seeCustomers) _Report('Wateja', () async => store.csvCustomers()),
       if (store.isOwner) _Report('Wauzaji', store.csvByCashier),
       _Report('Vikundi', () async => store.csvByCategory()),
       if (store.seeStock) _Report('Stoo ndogo', () async => store.csvLowStock()),
-      if (store.isOwner) _Report('Mwendo wa stoo', store.csvMoves),
+      if (store.isOwner) _Report('Mwendo wa stoo', store.csvMoves, dateColumn: 0),
     ];
     return Scaffold(
       backgroundColor: skyPage,
-      appBar: AppBar(title: const Text('Ripoti', style: TextStyle(fontWeight: FontWeight.w600))),
+      appBar: AppBar(title: Text(tx('Ripoti', 'Reports'), style: const TextStyle(fontWeight: FontWeight.w600))),
       body: ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         itemCount: reports.length + (store.isOwner ? 1 : 0),
@@ -45,7 +47,7 @@ class ReportsPage extends StatelessWidget {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
                 child: ListTile(
-                  title: const Text('Faida', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: ink)),
+                  title: Text(t('Faida'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: ink)),
                   trailing: const Icon(Icons.chevron_right, color: muted),
                   onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProfitPage(store: store))),
                 ),
@@ -57,7 +59,7 @@ class ReportsPage extends StatelessWidget {
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
             child: ListTile(
-              title: Text(report.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: ink)),
+              title: Text(t(report.title), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: ink)),
               trailing: const Icon(Icons.chevron_right, color: muted),
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _ReportView(report: report))),
             ),
@@ -79,6 +81,10 @@ class _ReportView extends StatefulWidget {
 class _ReportViewState extends State<_ReportView> {
   List<List<String>> _rows = [];
   bool _ready = false;
+  String _scope = 'all';
+  String _query = '';
+  String _pay = 'open';
+  DaySpan? _range;
 
   @override
   void initState() {
@@ -99,7 +105,7 @@ class _ReportViewState extends State<_ReportView> {
     final csv = await widget.report.build();
     if (!mounted) return;
     if (csv.trim().startsWith('haipatikani')) {
-      toast(context, 'Ripoti hii haipo kwa akaunti hii.');
+      toast(context, t('Ripoti hii haipo kwa akaunti hii.'));
       return;
     }
     try {
@@ -109,30 +115,36 @@ class _ReportViewState extends State<_ReportView> {
       await file.writeAsString(csv);
       await Share.shareXFiles([
         XFile(file.path, mimeType: 'text/csv', name: 'phonevault-$safe.csv'),
-      ], subject: widget.report.title);
+      ], subject: t(widget.report.title));
     } catch (_) {
       await Clipboard.setData(ClipboardData(text: csv));
-      if (mounted) toast(context, 'Imenakiliwa. Bandika kwenye daftari.');
+      if (mounted) toast(context, t('Imenakiliwa. Bandika kwenye daftari.'));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final header = _rows.isEmpty ? const <String>[] : _rows.first;
-    final body = _rows.length < 2 ? const <List<String>>[] : _rows.sublist(1);
+    final raw = _rows.length < 2 ? const <List<String>>[] : _rows.sublist(1);
+    final filtered = widget.report.dateColumn >= 0 || widget.report.debt;
+    final body = filtered ? raw.where(_keep).toList() : raw;
     return Scaffold(
       backgroundColor: skyPage,
       appBar: AppBar(
-        title: Text(widget.report.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+        title: Text(t(widget.report.title), style: const TextStyle(fontWeight: FontWeight.w600)),
         actions: [
-          IconButton(tooltip: 'Pakua', onPressed: _ready ? _download : null, icon: const Icon(Icons.ios_share)),
+          IconButton(tooltip: t('Pakua'), onPressed: _ready ? _download : null, icon: const Icon(Icons.ios_share)),
         ],
       ),
       body: !_ready
           ? const Center(child: CircularProgressIndicator(color: skyDeep))
-          : body.isEmpty
-              ? const EmptyHint(text: 'Hakuna kumbukumbu.')
-              : LayoutBuilder(
+          : Column(
+              children: [
+                if (filtered) _filters(),
+                Expanded(
+                  child: body.isEmpty
+                      ? EmptyHint(text: t('Hakuna kumbukumbu.'))
+                      : LayoutBuilder(
                   builder: (context, constraints) {
                     final wide = constraints.maxWidth >= 720;
                     final cards = [
@@ -155,7 +167,121 @@ class _ReportViewState extends State<_ReportView> {
                     );
                   },
                 ),
+                ),
+              ],
+            ),
     );
+  }
+
+  Widget _filters() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: vaultCard(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              onChanged: (value) => setState(() => _query = value.trim().toLowerCase()),
+              decoration: InputDecoration(
+                hintText: t('Tafuta'),
+                prefixIcon: const Icon(Icons.search),
+                counterText: '',
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (widget.report.debt)
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _payChip('open', t('Hayajalipwa')),
+                  _payChip('paid', t('Yaliyolipwa')),
+                  _payChip('all', t('Zote')),
+                ],
+              ),
+            if (widget.report.dateColumn >= 0)
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _scopeChip('today', t('Leo')),
+                  _scopeChip('week', t('Wiki')),
+                  _scopeChip('month', t('Mwezi')),
+                  _scopeChip('year', t('Mwaka')),
+                  _scopeChip('all', t('Zote')),
+                  ActionChip(
+                    avatar: Icon(Icons.calendar_today, size: 16, color: _range == null ? skyDeep : Colors.white),
+                    label: Text(_range == null ? t('Tarehe') : _range!.label),
+                    backgroundColor: _range == null ? Colors.white : skyDeep,
+                    labelStyle: TextStyle(color: _range == null ? ink : Colors.white, fontWeight: FontWeight.w700),
+                    side: BorderSide(color: _range == null ? const Color(0xFFD7E8D4) : skyDeep),
+                    onPressed: _pickRange,
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _scopeChip(String key, String label) {
+    final on = _range == null && _scope == key;
+    return ChoiceChip(
+      label: Text(label),
+      selected: on,
+      showCheckmark: false,
+      selectedColor: skyDeep,
+      backgroundColor: Colors.white,
+      labelStyle: TextStyle(color: on ? Colors.white : ink, fontWeight: FontWeight.w700),
+      side: BorderSide(color: on ? skyDeep : const Color(0xFFD7E8D4)),
+      onSelected: (_) => setState(() {
+        _range = null;
+        _scope = key;
+      }),
+    );
+  }
+
+  Widget _payChip(String key, String label) {
+    final on = _pay == key;
+    return ChoiceChip(
+      label: Text(label),
+      selected: on,
+      showCheckmark: false,
+      selectedColor: skyDeep,
+      backgroundColor: Colors.white,
+      labelStyle: TextStyle(color: on ? Colors.white : ink, fontWeight: FontWeight.w700),
+      side: BorderSide(color: on ? skyDeep : const Color(0xFFD7E8D4)),
+      onSelected: (_) => setState(() => _pay = key),
+    );
+  }
+
+  Future<void> _pickRange() async {
+    final picked = await pickDaySpan(context, current: _range);
+    if (picked != null && mounted) setState(() => _range = picked);
+  }
+
+  bool _keep(List<String> row) {
+    if (_query.isNotEmpty && !row.join(' ').toLowerCase().contains(_query)) return false;
+    if (widget.report.debt) {
+      final status = row.isEmpty ? '' : row.last;
+      if (_pay == 'open' && status != 'OPEN') return false;
+      if (_pay == 'paid' && status != 'PAID') return false;
+    }
+    final column = widget.report.dateColumn;
+    if (column < 0) return true;
+    if (_range == null && _scope == 'all') return true;
+    final when = DateTime.tryParse(row.length > column ? row[column] : '')?.toLocal();
+    if (when == null) return false;
+    if (_range != null) return _range!.contains(when);
+    final now = DateTime.now();
+    if (_scope == 'today') return sameDay(when, now);
+    if (_scope == 'week') return !when.isAfter(now) && now.difference(when).inDays < 7;
+    if (_scope == 'year') return when.year == now.year;
+    return when.year == now.year && when.month == now.month;
   }
 }
 
@@ -199,12 +325,14 @@ class _ReportCard extends StatelessWidget {
 }
 
 class _Report {
-  _Report(this.title, this.build);
+  _Report(this.title, this.build, {this.dateColumn = -1, this.debt = false});
   final String title;
   final Future<String> Function() build;
+  final int dateColumn;
+  final bool debt;
 }
 
-String _label(String raw) => raw.replaceAll('_', ' ');
+String _label(String raw) => t(raw.replaceAll('_', ' '));
 
 String _show(String header, String value) {
   final key = header.toLowerCase();
@@ -213,7 +341,7 @@ String _show(String header, String value) {
     final amount = double.tryParse(value);
     if (amount != null) return tsh(amount);
   }
-  return value;
+  return t(value);
 }
 
 List<List<String>> _parseCsv(String csv) {

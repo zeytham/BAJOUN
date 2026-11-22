@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 // Helper: Seed Default Customers if empty
-const seedDefaultCustomers = async () => {
+export const seedDefaultCustomers = async () => {
   const count = await prisma.customer.count();
   if (count === 0) {
     await prisma.customer.createMany({
@@ -46,8 +46,6 @@ const seedDefaultCustomers = async () => {
  */
 export const getCustomers = async (req, res) => {
   try {
-    await seedDefaultCustomers();
-
     const customers = await prisma.customer.findMany({
       include: {
         _count: {

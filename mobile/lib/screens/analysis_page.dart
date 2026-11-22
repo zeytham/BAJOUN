@@ -1,6 +1,8 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
+import '../date_span.dart';
+import '../lang.dart';
 import '../money.dart';
 import '../shop_store.dart';
 import '../theme.dart';
@@ -46,41 +48,43 @@ class _AnalysisPageState extends State<AnalysisPage> {
       builder: (context, _) {
         final store = widget.store;
         if (!store.seeAnalysis) {
-          return const Scaffold(backgroundColor: skyPage, body: LockedNote(title: 'Uchambuzi'));
+          return Scaffold(backgroundColor: skyPage, body: LockedNote(title: t('Uchambuzi')));
         }
         final period = _period;
         final books = store.booksFor(period);
+        final book = store.ledgerBetween(period.start, period.end);
         final maxY = books.dayTotals.fold<double>(0, (a, b) => a > b ? a : b);
         final mixTotal = books.cash + books.lipa;
         return Scaffold(
           backgroundColor: skyPage,
-          appBar: AppBar(title: const Text('Uchambuzi', style: TextStyle(fontWeight: FontWeight.w600))),
+          appBar: AppBar(title: Text(tx('Uchambuzi', 'Analysis'), style: const TextStyle(fontWeight: FontWeight.w600))),
           body: ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
             children: [
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: vaultCard(),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
-                    for (final item in const [
-                      ('7', 'Siku 7'),
-                      ('week', 'Wiki iliyopita'),
-                      ('month', 'Mwezi huu'),
-                      ('prevMonth', 'Mwezi uliopita'),
-                      ('year', 'Mwaka huu'),
-                      ('prevYear', 'Mwaka uliopita'),
+                    for (final item in [
+                      ('7', t('Siku 7')),
+                      ('week', t('Wiki iliyopita')),
+                      ('month', t('Mwezi huu')),
+                      ('prevMonth', t('Mwezi uliopita')),
+                      ('year', t('Mwaka huu')),
+                      ('prevYear', t('Mwaka uliopita')),
                     ])
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ChoiceChip(
-                          label: Text(item.$2),
-                          selected: _key == item.$1,
-                          selectedColor: sky,
-                          onSelected: (_) => setState(() => _key = item.$1),
-                        ),
+                      ChoiceChip(
+                        label: Text(t(item.$2)),
+                        selected: _key == item.$1,
+                        selectedColor: sky,
+                        onSelected: (_) => setState(() => _key = item.$1),
                       ),
                     ChoiceChip(
-                      label: Text(_key == 'range' ? period.label : 'Tarehe'),
+                      label: Text(_key == 'range' ? period.label : t('Tarehe')),
                       selected: _key == 'range',
                       selectedColor: sky,
                       onSelected: (_) => _pickRange(),
@@ -88,17 +92,15 @@ class _AnalysisPageState extends State<AnalysisPage> {
                   ],
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(period.label, style: captionStyle),
               const SizedBox(height: 12),
-              _kpis(store, books),
+              _kpis(store, books, book),
               const SizedBox(height: 12),
               _panel(
-                'Mauzo halisi',
+                t('Mauzo halisi'),
                 SizedBox(
                   height: 180,
                   child: books.days.isEmpty
-                      ? const EmptyHint(text: 'Hakuna siku kipindi hiki.')
+                      ? EmptyHint(text: t('Hakuna siku kipindi hiki.'))
                       : LineChart(
                           LineChartData(
                             minY: 0,
@@ -141,23 +143,34 @@ class _AnalysisPageState extends State<AnalysisPage> {
               ),
               const SizedBox(height: 12),
               _panel(
-                'Gharama na faida kwa bidhaa',
+                t('Simu na vifaa kando'),
                 books.lines.isEmpty
-                    ? const Text('Bado hakuna mauzo kipindi hiki.', style: TextStyle(color: muted))
+                    ? Text(t('Bado hakuna mauzo kipindi hiki.'), style: TextStyle(color: muted))
                     : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          for (final item in books.lines) _goods(store, item),
+                          for (final group in [true, false])
+                            if (books.lines.any((item) => item.phone == group)) ...[
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Text(group ? t('Simu') : t('Vifaa vingine'), style: const TextStyle(fontWeight: FontWeight.w600, color: ink)),
+                              ),
+                              for (final item in books.lines.where((row) => row.phone == group)) _goods(store, item),
+                            ],
                         ],
                       ),
               ),
               const SizedBox(height: 12),
               _panel(
-                'Cash na Lipa Namba',
+                t('Cash na Lipa Namba'),
                 Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _mix('Cash', books.cash, mixTotal),
+                    Text(t('Pesa iliyoingia siku hiyo, pamoja na malipo ya deni.'), style: captionStyle),
                     const SizedBox(height: 8),
-                    _mix('Lipa Namba', books.lipa, mixTotal),
+                    _mix(t('Cash'), books.cash, mixTotal),
+                    const SizedBox(height: 8),
+                    _mix(t('Lipa Namba'), books.lipa, mixTotal),
                   ],
                 ),
               ),
@@ -166,7 +179,7 @@ class _AnalysisPageState extends State<AnalysisPage> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(color: skyDeep, borderRadius: BorderRadius.circular(22)),
-                child: Text(_insight(store, books), style: const TextStyle(color: Colors.white, height: 1.4, fontWeight: FontWeight.w600)),
+                child: Text(_insight(store, books, book), style: const TextStyle(color: Colors.white, height: 1.4, fontWeight: FontWeight.w600)),
               ),
             ],
           ),
@@ -176,37 +189,27 @@ class _AnalysisPageState extends State<AnalysisPage> {
   }
 
   Future<void> _pickRange() async {
-    final now = DateTime.now();
-    final from = await showDatePicker(
-      context: context,
-      initialDate: _from ?? now,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(now.year + 1, 12, 31),
-      helpText: 'Kuanzia',
-    );
-    if (from == null || !mounted) return;
-    final to = await showDatePicker(
-      context: context,
-      initialDate: _to ?? from,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(now.year + 1, 12, 31),
-      helpText: 'Mpaka',
-    );
-    if (to == null || !mounted) return;
+    final current = _from == null ? null : DaySpan(_from!, _to ?? _from!);
+    final picked = await pickDaySpan(context, current: current);
+    if (picked == null || !mounted) return;
     setState(() {
-      _from = from;
-      _to = to;
+      _from = picked.start;
+      _to = picked.end;
       _key = 'range';
     });
   }
 
-  Widget _kpis(ShopStore store, PeriodBooks books) {
+  Widget _kpis(ShopStore store, PeriodBooks books, ShopLedger book) {
     final cards = <(String, String)>[
-      ('Mauzo halisi', tsh(books.net)),
-      ('Risiti', '${books.receipts}'),
-      ('Marejesho', tsh(books.returnsTotal)),
-      if (store.seeCost) ('Gharama', tsh(books.cost)),
-      if (store.seeCost) ('Faida', tsh(books.profit)),
+      (t('Mauzo halisi'), tsh(books.net)),
+      (t('Risiti'), '${books.receipts}'),
+      (t('Marejesho'), tsh(books.returnsTotal)),
+      if (store.seeCost) (t('Gharama ya simu'), tsh(book.phones.cost)),
+      if (store.seeCost) (t('Gharama ya vifaa'), tsh(book.goods.cost)),
+      if (store.seeCost) (t('Faida ya simu'), tsh(book.phoneProfit)),
+      if (store.seeCost) (t('Faida ya vifaa'), tsh(book.goodsProfit)),
+      if (store.seeCost) (t('Faida ya matatizo'), tsh(book.faultProfit)),
+      if (store.seeCost) (t('Faida ya duka'), tsh(book.shopProfit)),
     ];
     return GridView.count(
       crossAxisCount: 2,
@@ -242,16 +245,16 @@ class _AnalysisPageState extends State<AnalysisPage> {
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: const Color(0xFFF8FCFF), borderRadius: BorderRadius.circular(14)),
+      decoration: BoxDecoration(color: const Color(0xFFF4FBF1), borderRadius: BorderRadius.circular(14)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(item.name, style: const TextStyle(fontWeight: FontWeight.w600, color: ink)),
           const SizedBox(height: 6),
           _stat('Idadi', '${item.qty}'),
-          _stat('Mauzo', tsh(item.revenue)),
-          if (store.seeCost) _stat('Gharama', tsh(item.cost)),
-          if (store.seeCost) _stat('Faida', tsh(item.profit)),
+          _stat(t('Mauzo'), tsh(item.revenue)),
+          if (store.seeCost) _stat(t('Gharama'), tsh(item.cost)),
+          if (store.seeCost) _stat(t('Faida'), tsh(item.profit)),
         ],
       ),
     );
@@ -306,11 +309,11 @@ class _AnalysisPageState extends State<AnalysisPage> {
     );
   }
 
-  String _insight(ShopStore store, PeriodBooks books) {
-    if (books.receipts == 0 && books.returnCount == 0) return 'Hakuna mauzo wala marejesho kipindi hiki.';
+  String _insight(ShopStore store, PeriodBooks books, ShopLedger book) {
+    if (books.receipts == 0 && books.returnCount == 0 && book.faults <= 0) return t('Hakuna mauzo, marejesho, wala matatizo kipindi hiki.');
     if (!store.seeCost) {
-      return 'Mauzo halisi ${tsh(books.net)}. Risiti ${books.receipts}. Marejesho ${tsh(books.returnsTotal)}.';
+      return tf('Mauzo halisi {0}. Risiti {1}. Marejesho {2}.', [tsh(books.net), books.receipts, tsh(books.returnsTotal)]);
     }
-    return 'Mauzo halisi ${tsh(books.net)}. Gharama ya bidhaa ${tsh(books.cost)}. Faida ${tsh(books.profit)}. Marejesho ${books.returnCount}.';
+    return tf('Faida ya simu {0}. Faida ya vifaa {1}. Faida ya matatizo {2}. Zikiunganishwa, faida ya duka ni {3}.', [tsh(book.phoneProfit), tsh(book.goodsProfit), tsh(book.faultProfit), tsh(book.shopProfit)]);
   }
 }

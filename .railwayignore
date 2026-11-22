@@ -1,0 +1,6 @@
+mobile/
+*.apk
+*.docx
+**/.dart_tool/
+**/build/
+**/.gradle/

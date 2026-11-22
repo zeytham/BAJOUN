@@ -30,3 +30,7 @@ Thumbs.db
 .idea/
 **/.kotlin/
 **/*.salive
+
+# Local build and script caches
+mobile/android/build/
+**/__pycache__/

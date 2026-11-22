@@ -357,56 +357,58 @@ export const receiveAndRestockPO = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Purchase Order has already been received & restocked!' });
     }
 
-    for (const item of po.items) {
-      const product = item.product;
+    const updatedPo = await prisma.$transaction(async (tx) => {
+      for (const item of po.items) {
+        const product = item.product;
 
-      if (product.type !== 'PHONE') {
-        if (item.variantId) {
-          await prisma.productVariant.update({
-            where: { id: item.variantId },
-            data: { stockQuantity: { increment: item.quantityOrdered } },
-          });
-        } else if (!product.hasVariants) {
-          await prisma.product.update({
-            where: { id: product.id },
-            data: { stockQuantity: { increment: item.quantityOrdered } },
-          });
+        if (product.type !== 'PHONE') {
+          if (item.variantId) {
+            await tx.productVariant.update({
+              where: { id: item.variantId },
+              data: { stockQuantity: { increment: item.quantityOrdered } },
+            });
+          } else if (!product.hasVariants) {
+            await tx.product.update({
+              where: { id: product.id },
+              data: { stockQuantity: { increment: item.quantityOrdered } },
+            });
+          }
         }
       }
-    }
 
-    if (newPhoneUnits && Array.isArray(newPhoneUnits) && newPhoneUnits.length > 0) {
-      for (const unit of newPhoneUnits) {
-        if (unit.productId && unit.imei1) {
-          await prisma.phoneUnit.create({
-            data: {
-              productId: unit.productId,
-              imei1: unit.imei1,
-              imei2: unit.imei2 || null,
-              serialNumber: unit.serialNumber || null,
-              color: unit.color || 'Black',
-              storage: unit.storage || '128GB',
-              buyingPrice: parseFloat(unit.buyingPrice || unit.unitCost || 0),
-              retailPrice: parseFloat(unit.retailPrice || (unit.buyingPrice || 0) * 1.25),
-              minSellingPrice: parseFloat(unit.retailPrice || 0) * 0.95,
-              condition: 'NEW_SEALED',
-              status: 'IN_STOCK',
-            },
-          });
+      if (newPhoneUnits && Array.isArray(newPhoneUnits) && newPhoneUnits.length > 0) {
+        for (const unit of newPhoneUnits) {
+          if (unit.productId && unit.imei1) {
+            await tx.phoneUnit.create({
+              data: {
+                productId: unit.productId,
+                imei1: unit.imei1,
+                imei2: unit.imei2 || null,
+                serialNumber: unit.serialNumber || null,
+                color: unit.color || 'Black',
+                storage: unit.storage || '128GB',
+                buyingPrice: parseFloat(unit.buyingPrice || unit.unitCost || 0),
+                retailPrice: parseFloat(unit.retailPrice || (unit.buyingPrice || 0) * 1.25),
+                minSellingPrice: parseFloat(unit.retailPrice || 0) * 0.95,
+                condition: 'NEW_SEALED',
+                status: 'IN_STOCK',
+              },
+            });
+          }
         }
       }
-    }
 
-    const updatedPo = await prisma.purchaseOrder.update({
-      where: { id },
-      data: {
-        status: 'DELIVERED_AND_RESTOCKED',
-        receivedAt: new Date(),
-      },
-      include: {
-        supplier: true,
-        items: { include: { product: true } },
-      },
+      return tx.purchaseOrder.update({
+        where: { id },
+        data: {
+          status: 'DELIVERED_AND_RESTOCKED',
+          receivedAt: new Date(),
+        },
+        include: {
+          supplier: true,
+          items: { include: { product: true } },
+        },
+      });
     });
 
     return res.json({

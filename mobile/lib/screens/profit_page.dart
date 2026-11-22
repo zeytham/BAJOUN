@@ -5,10 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../date_span.dart';
 import '../money.dart';
 import '../shop_store.dart';
 import '../theme.dart';
 import '../widgets/ui.dart';
+import '../lang.dart';
 
 class ProfitPage extends StatefulWidget {
   const ProfitPage({super.key, required this.store});
@@ -21,7 +23,7 @@ class ProfitPage extends StatefulWidget {
 class _ProfitPageState extends State<ProfitPage> {
   String _span = 'today';
   int _year = DateTime.now().year;
-  DateTime? _day;
+  DaySpan? _picked;
 
   @override
   Widget build(BuildContext context) {
@@ -30,21 +32,22 @@ class _ProfitPageState extends State<ProfitPage> {
       builder: (context, _) {
         final store = widget.store;
         if (!store.isOwner) {
-          return const Scaffold(backgroundColor: skyPage, body: LockedNote(title: 'Faida'));
+          return Scaffold(backgroundColor: skyPage, body: LockedNote(title: t('Faida')));
         }
         final range = _range();
         final bucket = _collect(store, range.$1, range.$2);
-        final profit = bucket.sales - bucket.cost;
+        final book = store.ledgerBetween(range.$1, range.$2);
+        final profit = book.shopProfit;
         final gain = profit > 0 ? profit : 0.0;
         final loss = profit < 0 ? -profit : 0.0;
         final years = _years(store);
         return Scaffold(
           backgroundColor: skyPage,
           appBar: AppBar(
-            title: const Text('Faida'),
+            title: Text(t('Faida')),
             actions: [
               IconButton(
-                tooltip: 'Pakua',
+                tooltip: t('Pakua'),
                 onPressed: () => _share(store.csvProfit()),
                 icon: const Icon(Icons.ios_share),
               ),
@@ -57,19 +60,21 @@ class _ProfitPageState extends State<ProfitPage> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  _chip('Leo', 'today'),
-                  _chip('Jana', 'yesterday'),
-                  _chip('Wiki', 'week'),
-                  _chip('Mwezi', 'month'),
-                  _chip('Mwaka', 'year'),
+                  _chip(t('Leo'), 'today'),
+                  _chip(t('Jana'), 'yesterday'),
+                  _chip(t('Wiki'), 'week'),
+                  _chip(t('Mwezi'), 'month'),
+                  _chip(t('Mwaka'), 'year'),
                   ActionChip(
-                    avatar: const Icon(Icons.calendar_today, size: 16, color: skyDeep),
-                    label: Text(_day == null ? 'Siku' : formatDay(_day!)),
-                    onPressed: _pickDay,
+                    avatar: Icon(Icons.calendar_today, size: 16, color: _picked == null ? skyDeep : Colors.white),
+                    label: Text(_picked == null ? t('Tarehe') : _picked!.label),
+                    backgroundColor: _picked == null ? null : skyDeep,
+                    labelStyle: TextStyle(color: _picked == null ? ink : Colors.white, fontWeight: FontWeight.w700),
+                    onPressed: _pickRange,
                   ),
                 ],
               ),
-              if (_span == 'year') ...[
+              if (_picked == null && _span == 'year') ...[
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -86,16 +91,66 @@ class _ProfitPageState extends State<ProfitPage> {
               ],
               const SizedBox(height: 12),
               Text(range.$3, style: captionStyle),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(child: _stat('Mauzo', tsh(bucket.sales))),
-                  const SizedBox(width: 8),
-                  Expanded(child: _stat('Gharama', tsh(bucket.cost))),
-                ],
+              const SizedBox(height: 6),
+              Text(
+                t('Simu na vifaa vinahesabiwa kando. Bidhaa zilizoharibika zina gharama yake. Mwisho namba tatu zinaunganishwa kuwa faida ya duka.'),
+                style: captionStyle,
               ),
               const SizedBox(height: 8),
-              _stat(profit >= 0 ? 'Faida' : 'Hasara', tsh(profit.abs()), emphasize: true, warn: profit < 0),
+              _stat(profit >= 0 ? t('Faida ya duka') : t('Hasara ya duka'), tsh(profit.abs()), emphasize: true, warn: profit < 0),
+              const SizedBox(height: 8),
+              _sideCard(
+                t('Simu'),
+                t('Mauzo, gharama na faida ya simu peke yake.'),
+                book.phones,
+                store.phoneCapital,
+              ),
+              const SizedBox(height: 8),
+              _sideCard(
+                t('Vifaa vingine'),
+                t('Mauzo, gharama na faida ya vifaa peke yake.'),
+                book.goods,
+                store.goodsCapital,
+              ),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: vaultCard(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(t('Bidhaa zilizoharibika'), style: sectionStyle),
+                    const SizedBox(height: 4),
+                    Text(t('Gharama hii inapunguza faida. Sio mauzo.'), style: captionStyle),
+                    const SizedBox(height: 8),
+                    _legend(skyDeep, t('Mauzo ya matatizo'), tsh(book.faultSales)),
+                    _legend(const Color(0xFFB45309), t('Gharama ya simu'), tsh(book.phoneFaults)),
+                    _legend(const Color(0xFFB45309), t('Gharama ya vifaa'), tsh(book.goodsFaults)),
+                    _legend(const Color(0xFFB45309), t('Faida ya matatizo'), tsh(book.faultProfit)),
+                    _legend(skyDeep, t('Mtaji wa matatizo uliopo'), tsh(store.faultCapital)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: vaultCard(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(t('Hesabu ya pamoja'), style: sectionStyle),
+                    const SizedBox(height: 4),
+                    Text(t('Faida ya simu + faida ya vifaa + faida ya matatizo.'), style: captionStyle),
+                    const SizedBox(height: 8),
+                    _legend(skyDeep, t('Faida ya simu'), tsh(book.phoneProfit)),
+                    _legend(skyDeep, t('Faida ya vifaa'), tsh(book.goodsProfit)),
+                    _legend(const Color(0xFFB45309), t('Faida ya matatizo'), tsh(book.faultProfit)),
+                    _legend(profit >= 0 ? skyDeep : const Color(0xFFB45309), t('Faida ya duka'), tsh(profit)),
+                  ],
+                ),
+              ),
               const SizedBox(height: 12),
               Container(
                 width: double.infinity,
@@ -104,10 +159,10 @@ class _ProfitPageState extends State<ProfitPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Faida na gharama', style: sectionStyle),
+                    Text(t('Faida na gharama'), style: sectionStyle),
                     const SizedBox(height: 8),
-                    if (bucket.sales <= 0 && bucket.cost <= 0)
-                      const Padding(padding: EdgeInsets.symmetric(vertical: 24), child: Text('Hakuna mauzo kipindi hiki.', style: captionStyle))
+                    if (book.sales <= 0 && book.cost <= 0 && book.faults <= 0)
+                      Padding(padding: const EdgeInsets.symmetric(vertical: 24), child: Text(t('Hakuna mauzo kipindi hiki.'), style: captionStyle))
                     else
                       SizedBox(
                         height: 180,
@@ -116,8 +171,8 @@ class _ProfitPageState extends State<ProfitPage> {
                             sectionsSpace: 2,
                             centerSpaceRadius: 42,
                             sections: [
-                              if (bucket.cost > 0)
-                                PieChartSectionData(value: bucket.cost, color: const Color(0xFF7DD3F0), title: '', radius: 48),
+                              if (book.cost > 0)
+                                PieChartSectionData(value: book.cost, color: const Color(0xFFB7D7A8), title: '', radius: 48),
                               if (gain > 0) PieChartSectionData(value: gain, color: skyDeep, title: '', radius: 54),
                               if (loss > 0) PieChartSectionData(value: loss, color: const Color(0xFFB45309), title: '', radius: 54),
                             ],
@@ -125,9 +180,9 @@ class _ProfitPageState extends State<ProfitPage> {
                         ),
                       ),
                     const SizedBox(height: 8),
-                    _legend(const Color(0xFF7DD3F0), 'Gharama', tsh(bucket.cost)),
-                    _legend(skyDeep, 'Faida', tsh(gain)),
-                    if (loss > 0) _legend(const Color(0xFFB45309), 'Hasara', tsh(loss)),
+                    _legend(const Color(0xFFB7D7A8), t('Gharama ya simu na vifaa'), tsh(book.cost)),
+                    _legend(skyDeep, t('Faida'), tsh(gain)),
+                    if (loss > 0) _legend(const Color(0xFFB45309), t('Hasara'), tsh(loss)),
                   ],
                 ),
               ),
@@ -139,10 +194,10 @@ class _ProfitPageState extends State<ProfitPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(_span == 'year' ? 'Kwa mwezi' : 'Kwa siku', style: sectionStyle),
+                    Text(_span == 'year' ? t('Kwa mwezi') : t('Kwa siku'), style: sectionStyle),
                     const SizedBox(height: 10),
                     if (bucket.rows.isEmpty)
-                      const Text('Hakuna mauzo.', style: captionStyle)
+                      Text(t('Hakuna mauzo.'), style: captionStyle)
                     else
                       for (final row in bucket.rows)
                         Padding(
@@ -170,10 +225,10 @@ class _ProfitPageState extends State<ProfitPage> {
   Widget _chip(String label, String span) {
     return ChoiceChip(
       label: Text(label),
-      selected: _day == null && _span == span,
+      selected: _picked == null && _span == span,
       selectedColor: sky,
       onSelected: (_) => setState(() {
-        _day = null;
+        _picked = null;
         _span = span;
       }),
     );
@@ -199,6 +254,28 @@ class _ProfitPageState extends State<ProfitPage> {
     );
   }
 
+  Widget _sideCard(String title, String note, SideTake side, double capital) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: vaultCard(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: sectionStyle),
+          const SizedBox(height: 4),
+          Text(note, style: captionStyle),
+          const SizedBox(height: 8),
+          _legend(skyDeep, t('Mauzo'), tsh(side.sales)),
+          _legend(const Color(0xFFB7D7A8), t('Gharama ya zilizouzwa'), tsh(side.cost)),
+          _legend(const Color(0xFFB45309), t('Marejesho'), tsh(side.returned)),
+          _legend(side.profit >= 0 ? skyDeep : const Color(0xFFB45309), t('Faida'), tsh(side.profit)),
+          _legend(skyDeep, t('Mtaji uliopo sasa'), tsh(capital)),
+        ],
+      ),
+    );
+  }
+
   Widget _legend(Color color, String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
@@ -215,25 +292,24 @@ class _ProfitPageState extends State<ProfitPage> {
 
   (DateTime, DateTime, String) _range() {
     final now = DateTime.now();
-    if (_day != null) {
-      final start = DateTime(_day!.year, _day!.month, _day!.day);
-      return (start, start.add(const Duration(days: 1)), formatDay(start));
+    if (_picked != null) {
+      return (_picked!.start, _picked!.end.add(const Duration(days: 1)), _picked!.label);
     }
     switch (_span) {
       case 'yesterday':
         final start = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 1));
-        return (start, start.add(const Duration(days: 1)), 'Jana');
+        return (start, start.add(const Duration(days: 1)), t('Jana'));
       case 'week':
         final end = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
-        return (end.subtract(const Duration(days: 7)), end, 'Siku 7');
+        return (end.subtract(const Duration(days: 7)), end, t('Siku 7'));
       case 'month':
         final start = DateTime(now.year, now.month, 1);
-        return (start, DateTime(now.year, now.month + 1, 1), 'Mwezi huu');
+        return (start, DateTime(now.year, now.month + 1, 1), t('Mwezi huu'));
       case 'year':
         return (DateTime(_year, 1, 1), DateTime(_year + 1, 1, 1), '$_year');
       default:
         final start = DateTime(now.year, now.month, now.day);
-        return (start, start.add(const Duration(days: 1)), 'Leo');
+        return (start, start.add(const Duration(days: 1)), t('Leo'));
     }
   }
 
@@ -262,35 +338,49 @@ class _ProfitPageState extends State<ProfitPage> {
       final qty = asInt(item['qty']);
       final lineSales = asDouble(item['price']) * qty;
       final lineCost = asDouble(item['cost']) * qty;
+      final faultSale = asInt(item['faulty']) == 1;
       sales += lineSales;
-      cost += lineCost;
+      if (!faultSale) cost += lineCost;
       final key = _span == 'year' ? _monthsOf(when.month) : formatDay(when);
-      groups[key] = (groups[key] ?? 0) + (lineSales - lineCost);
+      groups[key] = (groups[key] ?? 0) + (faultSale ? lineSales : lineSales - lineCost);
+    }
+    for (final item in store.returnItems) {
+      final parent = store.returns.cast<Map<String, Object?>?>().firstWhere((row) => row?['id'] == item['return_id'], orElse: () => null);
+      if (parent == null) continue;
+      if (!allowed.contains(parent['sale_id'])) continue;
+      final when = DateTime.tryParse('${parent['created_at']}')?.toLocal();
+      if (when == null || when.isBefore(start) || !when.isBefore(end)) continue;
+      final origin = store.saleItems.cast<Map<String, Object?>?>().firstWhere((row) => row?['id'] == item['sale_item_id'], orElse: () => null);
+      final faultSale = origin != null && asInt(origin['faulty']) == 1;
+      final margin = faultSale ? asDouble(item['price']) * asInt(item['qty']) : (asDouble(item['price']) - asDouble(item['cost'])) * asInt(item['qty']);
+      final key = _span == 'year' ? _monthsOf(when.month) : formatDay(when);
+      groups[key] = (groups[key] ?? 0) - margin;
+    }
+    for (final fault in store.faults) {
+      final when = DateTime.tryParse('${fault['created_at']}')?.toLocal();
+      if (when == null || when.isBefore(start) || !when.isBefore(end)) continue;
+      final key = _span == 'year' ? _monthsOf(when.month) : formatDay(when);
+      groups[key] = (groups[key] ?? 0) - asDouble(fault['cost']) * asInt(fault['qty']);
     }
     return _Bucket(sales, cost, [for (final entry in groups.entries) _Row(entry.key, entry.value)]);
   }
 
   String _monthsOf(int month) => const ['Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun', 'Jul', 'Ago', 'Sep', 'Okt', 'Nov', 'Des'][month - 1];
 
-  Future<void> _pickDay() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _day ?? DateTime.now(),
-      firstDate: DateTime(2024),
-      lastDate: DateTime.now(),
-    );
-    if (picked != null) setState(() => _day = picked);
+  Future<void> _pickRange() async {
+    final picked = await pickDaySpan(context, current: _picked);
+    if (picked != null && mounted) setState(() => _picked = picked);
   }
 
   Future<void> _share(String csv) async {
     if (csv.trim().startsWith('haipatikani')) {
-      toast(context, 'Ripoti hii haipo kwa akaunti hii.');
+      toast(context, t('Ripoti hii haipo kwa akaunti hii.'));
       return;
     }
     final dir = await getTemporaryDirectory();
     final file = File('${dir.path}/phonevault-faida.csv');
     await file.writeAsString(csv);
-    await Share.shareXFiles([XFile(file.path, mimeType: 'text/csv', name: 'faida.csv')], subject: 'Faida');
+    await Share.shareXFiles([XFile(file.path, mimeType: 'text/csv', name: 'faida.csv')], subject: t('Faida'));
   }
 }
 

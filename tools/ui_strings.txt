@@ -1,0 +1,726 @@
+cloud_sync.dart:17: Anwani ya cloud ianze na https://
+cloud_sync.dart:28: Token ya cloud si sahihi.
+cloud_sync.dart:29: Cloud imejibu ${response.statusCode}.
+cloud_sync.dart:33: Mtandao haupo. Risiti imebaki kwenye simu.
+cloud_sync.dart:35: Cloud haijafikiwa. Risiti imebaki kwenye simu.
+cloud_sync.dart:42: ] ??
+cloud_sync.dart:60: ] ?? item[
+lang.dart:38: iko juu ya risiti
+lang.dart:39: iko kwenye dashibodi
+lang.dart:41: anaweza kuingia
+lang.dart:42: kundi hili lipo
+lang.dart:43: sehemu imerudi
+lang.dart:44: bidhaa zote zimerudi
+lang.dart:53: ^Subiri sekunde (\d+)\.$
+lang.dart:54: Wait ${wait.group(1)} seconds.
+lang.dart:55: ^Majaribio mengi\. Subiri sekunde (\d+)\.$
+lang.dart:56: Too many tries. Wait ${many.group(1)} seconds.
+lang.dart:57: ^Stoo ya (.+) haitoshi\.$
+lang.dart:58: Not enough ${stock.group(1)} in stock.
+lang.dart:59: ^(.+) tayari imeuza\.$
+lang.dart:60: ${sold.group(1)} is already sold.
+lang.dart:61: ^(.+) imezidi idadi iliyouzwa\.$
+lang.dart:62: ${over.group(1)} is more than the quantity sold.
+lang.dart:63: ^(.+) haiwezi kurudi\. Tayari haiko kama iliyouzwa\.$
+lang.dart:64: ${back.group(1)} cannot come back. It is no longer sold.
+lang.dart:65: ^(.+) imezidi idadi iliyo nje\.$
+lang.dart:66: ${wing.group(1)} is more than the quantity still out.
+lang.dart:67: ^Idadi imeongezwa\. Sasa ni (\d+)\.$
+lang.dart:68: Quantity added. It is now ${added.group(1)}.
+lang.dart:69: ^(.+) anaweza kuingia sasa$
+lang.dart:70: ${staff.group(1)} can sign in now.
+lang.dart:71: ^Bado hakuna mauzo katika siku (\d+) zilizopita\. Uza bidhaa ya kwanza ili grafu ianze\.$
+lang.dart:72: No sales in the last ${days.group(1)} days. Sell one item and the chart starts.
+lang.dart:77: Akaunti haipo.
+lang.dart:77: Account is missing.
+lang.dart:78: Weka jina la mmiliki.
+lang.dart:78: Enter the owner name.
+lang.dart:79: PIN iwe tarakimu 4.
+lang.dart:79: PIN must be 4 digits.
+lang.dart:80: Hiki ni kwa mmiliki tu.
+lang.dart:80: Owner only.
+lang.dart:81: Hakuna bidhaa yenye msimbo huo.
+lang.dart:81: No item with that code.
+lang.dart:82: Huna ruhusa.
+lang.dart:82: Not allowed.
+lang.dart:83: Huna ruhusa ya wateja.
+lang.dart:83: Customers are not allowed.
+lang.dart:84: Weka jina la mteja.
+lang.dart:84: Enter the customer name.
+lang.dart:85: Namba ianze na 0 na iwe tarakimu 10.
+lang.dart:85: Number must start with 0 and have 10 digits.
+lang.dart:86: Huna ruhusa ya madeni.
+lang.dart:86: Debts are not allowed.
+lang.dart:87: Ingia kwanza.
+lang.dart:87: Sign in first.
+lang.dart:88: Weka jina la duka.
+lang.dart:88: Enter the shop name.
+lang.dart:89: Lipa Namba iwe tarakimu 5 hadi 15.
+lang.dart:89: Lipa number must be 5 to 15 digits.
+lang.dart:90: Simu ya duka ianze na 0 na iwe tarakimu 10.
+lang.dart:90: Shop phone must start with 0 and have 10 digits.
+lang.dart:91: Picha haikusomeka. Chagua JPG au PNG.
+lang.dart:91: Picture could not be read. Choose JPG or PNG.
+lang.dart:92: Weka anwani ya kompyuta.
+lang.dart:92: Enter the shop address.
+lang.dart:93: Anwani imehifadhiwa kwenye simu hii. Seva haijapokea duka. Angalia mtandao na uhifadhi tena.
+lang.dart:93: Address saved on this phone. The server did not receive the shop. Check the network and save again.
+lang.dart:94: Weka anwani na neno la kuunganisha.
+lang.dart:94: Enter the address and the connecting word.
+lang.dart:95: Anwani ianze na https://
+lang.dart:95: Address must start with https://
+lang.dart:96: Neno au mtandao umekataa. Angalia neno na ujaribu tena.
+lang.dart:96: The word or the network refused. Check the word and try again.
+lang.dart:97: Duka bado halijatumwa. Fungua simu ya mmiliki yenye mauzo, weka anwani na neno, kisha hifadhi.
+lang.dart:97: The shop has not been sent yet. Open the owner phone, enter the address and the word, then save.
+lang.dart:98: Weka jina la muuzaji.
+lang.dart:98: Enter the seller name.
+lang.dart:99: Jina hili tayari lipo.
+lang.dart:99: That name already exists.
+lang.dart:100: Huwezi kufunga akaunti ya mmiliki.
+lang.dart:100: The owner account stays open.
+lang.dart:101: Badilisha PIN yako kwenye sehemu ya PIN yangu.
+lang.dart:101: Change your PIN under My PIN.
+lang.dart:102: Maneno hayafanani.
+lang.dart:102: The words do not match.
+lang.dart:103: Neno liwe herufi 8 hadi 40.
+lang.dart:103: The word must be 8 to 40 letters.
+lang.dart:104: Neno liwe na herufi, si tarakimu peke yake.
+lang.dart:104: The word needs a letter.
+lang.dart:105: Usiandike neno la kuunganisha.
+lang.dart:105: Do not type the connecting word here.
+lang.dart:106: PIN hazifanani.
+lang.dart:106: The PINs do not match.
+lang.dart:107: Bado hakuna neno la kurejesha.
+lang.dart:107: No recovery word yet.
+lang.dart:108: Neno si sahihi.
+lang.dart:108: Wrong word.
+lang.dart:109: Akaunti ya mmiliki haipo.
+lang.dart:109: Owner account is missing.
+lang.dart:110: PIN mpya iwe tarakimu 4.
+lang.dart:110: New PIN must be 4 digits.
+lang.dart:111: Chagua PIN tofauti.
+lang.dart:111: Choose a different PIN.
+lang.dart:112: Mmiliki ana sehemu zote.
+lang.dart:112: The owner already has every part.
+lang.dart:113: PIN si sahihi.
+lang.dart:113: Wrong PIN.
+lang.dart:114: Huna ruhusa ya kubadilisha stoo.
+lang.dart:114: You cannot change stock.
+lang.dart:115: Faili hii si nakala ya PhoneVault.
+lang.dart:115: This file is not a PhoneVault copy.
+lang.dart:116: Nakala hii inatoka kwenye toleo jipya. Sasisha app kwanza.
+lang.dart:117: Nakala haikurejeshwa. Duka la awali limebaki.
+lang.dart:117: The copy was not restored. The shop stayed as it was.
+lang.dart:118: Kundi la simu halifutiki.
+lang.dart:118: The phone group cannot be deleted.
+lang.dart:119: Kundi halipo.
+lang.dart:119: Group is missing.
+lang.dart:120: Kundi la Nyingine linabaki kwa bidhaa zisizo na kundi.
+lang.dart:120: The Other group stays for items with no group.
+lang.dart:121: Mteja haipo.
+lang.dart:121: Customer is missing.
+lang.dart:122: Ana deni wazi. Pokea malipo kwanza.
+lang.dart:122: This customer still has a debt. Receive the payment first.
+lang.dart:123: Weka idadi unayoongeza.
+lang.dart:123: Enter the quantity to add.
+lang.dart:124: Bidhaa haipo.
+lang.dart:124: Item is missing.
+lang.dart:125: Idadi si sahihi.
+lang.dart:125: Quantity is not valid.
+lang.dart:126: Kiwango cha onyo si sahihi.
+lang.dart:126: The warning level is not valid.
+lang.dart:127: Warranty iwe siku 0 hadi 730, kwa wiki na siku.
+lang.dart:127: Warranty must be 0 to 730 days.
+lang.dart:128: Idadi yenye matatizo si sahihi.
+lang.dart:128: Faulty quantity is not valid.
+lang.dart:129: Barcode si sahihi.
+lang.dart:129: Barcode is not valid.
+lang.dart:130: Barcode hii tayari ipo.
+lang.dart:130: That barcode already exists.
+lang.dart:131: Weka jina la bidhaa.
+lang.dart:131: Enter the item name.
+lang.dart:132: Weka jina la simu.
+lang.dart:132: Enter the phone name.
+lang.dart:133: IMEI iwe tarakimu 8 hadi 20.
+lang.dart:133: IMEI must be 8 to 20 digits.
+lang.dart:134: Bei ya chini si sahihi.
+lang.dart:134: Minimum price is not valid.
+lang.dart:135: Hali ya simu si sahihi.
+lang.dart:135: Phone condition is not valid.
+lang.dart:136: IMEI hii tayari ipo.
+lang.dart:136: That IMEI already exists.
+lang.dart:137: Simu haipo.
+lang.dart:137: Phone is missing.
+lang.dart:138: Simu iliyouzwa haiwezi kufutwa.
+lang.dart:138: A sold phone cannot be deleted.
+lang.dart:139: Deni halipo.
+lang.dart:139: Debt is missing.
+lang.dart:140: Deni hili tayari limefungwa.
+lang.dart:140: This debt is already closed.
+lang.dart:141: Weka kiasi.
+lang.dart:141: Enter the amount.
+lang.dart:142: Kiasi kinazidi deni lililobaki.
+lang.dart:142: The amount is more than the balance.
+lang.dart:143: Risiti haipo.
+lang.dart:143: Receipt is missing.
+lang.dart:144: Risiti tayari imefutwa.
+lang.dart:144: Receipt is already void.
+lang.dart:145: Risiti hii ina marejesho. Rudisha kilichobaki, usifute risiti.
+lang.dart:145: This receipt has a return. Return what is left. Do not void it.
+lang.dart:146: Deni lina malipo. Huwezi kufuta risiti hii.
+lang.dart:146: The debt has a payment. This receipt cannot be voided.
+lang.dart:147: Weka jina la mtu aliyechukua.
+lang.dart:147: Enter the name of the person who took it.
+lang.dart:148: Chagua bidhaa aliyochukua.
+lang.dart:148: Choose the item they took.
+lang.dart:149: Rekodi haipo.
+lang.dart:149: Record is missing.
+lang.dart:150: Bidhaa hizi zimesharudishwa.
+lang.dart:150: These items are already back.
+lang.dart:151: Chagua idadi anayorudisha.
+lang.dart:151: Choose the quantity coming back.
+lang.dart:152: Bei si sahihi.
+lang.dart:152: Price is not valid.
+lang.dart:153: Gharama si sahihi.
+lang.dart:153: Cost is not valid.
+lang.dart:154: Bidhaa haipo kwenye risiti.
+lang.dart:154: Item is not on the receipt.
+lang.dart:155: Picha haikufunguka.
+lang.dart:155: The picture did not open.
+lang.dart:156: Andika bei ya kuuza.
+lang.dart:156: Enter the selling price.
+lang.dart:157: Namba imenakiliwa
+lang.dart:157: Number copied.
+lang.dart:158: Duka limehifadhiwa
+lang.dart:158: Shop saved.
+lang.dart:159: Logo iko juu ya risiti.
+lang.dart:159: Logo is on the receipt.
+lang.dart:160: Picha yako iko kwenye dashibodi.
+lang.dart:160: Your photo is on the home screen.
+lang.dart:161: PIN imebadilika
+lang.dart:161: PIN changed.
+lang.dart:162: Neno la kurejesha limehifadhiwa. Usipeane kwa muuzaji.
+lang.dart:162: Recovery word saved. Do not give it to the seller.
+lang.dart:163: Sehemu zimehifadhiwa
+lang.dart:163: Parts saved.
+lang.dart:164: Imeondolewa. Historia inabaki.
+lang.dart:164: Removed. The history stays.
+lang.dart:165: Kundi hili lipo tayari.
+lang.dart:165: That group already exists.
+lang.dart:166: Kundi limeongezwa.
+lang.dart:166: Group added.
+lang.dart:167: Sehemu imerudi stoo. Iliyobaki bado iko nje.
+lang.dart:167: Part is back in stock. The rest is still out.
+lang.dart:168: Bidhaa zote zimerudi stoo.
+lang.dart:168: All items are back in stock.
+lang.dart:169: WhatsApp imefunguka. Bonyeza Tuma kumkumbusha mteja.
+lang.dart:169: WhatsApp is open. Press Send to remind the customer.
+lang.dart:170: WhatsApp imefunguka kwa namba hii. Bonyeza Tuma.
+lang.dart:170: WhatsApp is open for this number. Press Send.
+lang.dart:171: Inatuma mabadiliko...
+lang.dart:171: Sending changes...
+lang.dart:172: Inaleta mabadiliko...
+lang.dart:172: Bringing changes...
+lang.dart:173: Inaweka logo...
+lang.dart:173: Setting the logo...
+lang.dart:174: Inaondoa logo...
+lang.dart:174: Removing the logo...
+lang.dart:175: Inaweka picha...
+lang.dart:175: Setting the photo...
+lang.dart:176: Inaondoa picha...
+lang.dart:176: Removing the photo...
+lang.dart:177: PIN ya mmiliki imebadilika. Chagua mmiliki, kisha ingia na PIN mpya.
+lang.dart:177: Owner PIN changed. Choose the owner, then sign in with the new PIN.
+lang.dart:178: Duka halikufunguka. Fungua tena.
+lang.dart:178: The shop did not open. Open the app again.
+main.dart:242: Rudi nyuma
+main.dart:272: Mimi ni muuzaji
+main.dart:272: I am the seller
+main.dart:281: Mimi ni mmiliki
+main.dart:281: I am the owner
+main.dart:293: Jina la mmiliki
+main.dart:293: Owner name
+main.dart:306: Ingia kwenye duka la mmiliki
+main.dart:355: Nimesahau PIN
+main.dart:355: Forgot PIN
+main.dart:397: Karibu, ${_creating ? _name.text.trim() : _selected?[
+main.dart:433: Chagua simu
+main.dart:433: Choose this phone
+main.dart:434: Fungua duka
+main.dart:434: Open the shop
+main.dart:435: Rudia PIN
+main.dart:435: Repeat the PIN
+main.dart:440: Muuzaji anaingia kwa PIN aliyopewa na mmiliki.
+main.dart:441: PIN ya tarakimu 4. Inabaki kwenye simu hii.
+main.dart:441: A 4 digit PIN. It stays on this phone.
+main.dart:442: } · ${roleLabel(
+main.dart:442: )} · ${tx(
+main.dart:537: Unganisha na duka
+main.dart:541: Anwani ya duka
+main.dart:543: Neno la kuunganisha
+main.dart:559: Inaunganisha duka...
+main.dart:559: Joining the shop...
+main.dart:616: PIN hazifanani. Anza tena.
+main.dart:622: Inafungua duka...
+main.dart:645: Mmiliki aweke neno la kurejesha kwenye Mipangilio akiwa ameingia. Muuzaji akisahau, mmiliki anamwekewa PIN mpya humo humo.
+main.dart:655: Weka PIN mpya
+main.dart:657: Neno la kurejesha
+main.dart:658: PIN mpya ya mmiliki
+main.dart:666: Inakagua neno...
+main.dart:666: Checking the word...
+money.dart:11: ${digits.substring(0, 4)} ${digits.substring(4, 7)} ${digits.substring(7)}
+money.dart:27: TSH $buffer
+money.dart:32: ${imei.substring(0, 4)} •••• ${imei.substring(imei.length - 4)}
+money.dart:57: ${_weekdays[local.weekday - 1]}, ${local.day} ${_months[local.month - 1]} ${local.year} · $hh:$mm
+money.dart:65: ${date.day} ${_months[date.month - 1]} ${date.year}, $hh:$mm
+money.dart:68: ${date.day} ${_months[date.month - 1]} ${date.year}
+money.dart:76: Lipa Namba
+money.dart:93: Hakuna warranty
+money.dart:96: siku $rest
+money.dart:97: wiki 1
+money.dart:97: wiki $weeks
+money.dart:98: wiki $weeks na siku $rest
+money.dart:109: mwezi 1
+money.dart:109: miezi $months
+money.dart:111: siku 1
+money.dart:111: siku $days
+receipt_pdf.dart:56: Imeuzwa kwa deni
+receipt_pdf.dart:102: Sababu: ${reason.trim()}
+receipt_pdf.dart:117: Ukumbusho wa deni
+receipt_pdf.dart:127: Karibu dukani, au lipa kwenye namba ya duka, ili tuifunge hesabu yako.
+receipt_pdf.dart:158: Simu ya duka
+receipt_pdf.dart:205: ${line.name}  x${line.qty}
+alerts_page.dart:24: Soma zote
+alerts_page.dart:28: Hakuna taarifa.
+analysis_page.dart:72: Siku 7
+analysis_page.dart:73: Wiki iliyopita
+analysis_page.dart:74: Mwezi huu
+analysis_page.dart:75: Mwezi uliopita
+analysis_page.dart:76: Mwaka huu
+analysis_page.dart:77: Mwaka uliopita
+analysis_page.dart:98: Mauzo halisi
+analysis_page.dart:102: Hakuna siku kipindi hiki.
+analysis_page.dart:145: Simu na vifaa kando
+analysis_page.dart:147: Bado hakuna mauzo kipindi hiki.
+analysis_page.dart:155: Vifaa vingine
+analysis_page.dart:164: Cash na Lipa Namba
+analysis_page.dart:168: Pesa iliyoingia siku hiyo, pamoja na malipo ya deni.
+analysis_page.dart:220: Gharama ya simu
+analysis_page.dart:221: Gharama ya vifaa
+analysis_page.dart:222: Faida ya simu
+analysis_page.dart:223: Faida ya vifaa
+analysis_page.dart:224: Faida ya matatizo
+analysis_page.dart:225: Faida ya duka
+analysis_page.dart:326: Hakuna mauzo, marejesho, wala matatizo kipindi hiki.
+analysis_page.dart:328: Mauzo halisi ${tsh(books.net)}. Risiti ${books.receipts}. Marejesho ${tsh(books.returnsTotal)}.
+analysis_page.dart:330: Faida ya simu ${tsh(book.phoneProfit)}. Faida ya vifaa ${tsh(book.goodsProfit)}. Faida ya matatizo ${tsh(book.faultProfit)}. Zikiunganishwa, faida ya duka ni ${tsh(book.shopProfit)}.
+customers_page.dart:38: ]} ${row[
+customers_page.dart:59: Tafuta jina au simu
+customers_page.dart:62: Hakuna mteja.
+customers_page.dart:69: Hakuna simu
+customers_page.dart:85: Mteja mpya
+customers_page.dart:114: Manunuzi ${tsh(asDouble(person[
+customers_page.dart:117: Hana deni.
+customers_page.dart:122: ]} · ${formatWhen(
+customers_page.dart:140: Futa mteja
+customers_page.dart:152: Futa ${person[
+customers_page.dart:153: Jina litaondoka kwenye orodha. Risiti, madeni na ripoti za zamani zinabaki.
+customers_page.dart:158: Mteja amefutwa.
+debts_page.dart:13: Muda umeisha · $when${term.isEmpty ?
+debts_page.dart:14: Analipa $when${term.isEmpty ?
+debts_page.dart:45: Jumla inayosubiri
+debts_page.dart:51: ${open.length} wateja
+debts_page.dart:56: Hakuna deni lililo wazi.
+debts_page.dart:100: )} · ${formatWhen(
+debts_page.dart:109: Siku 30 bila malipo
+debts_page.dart:117: Alikopa ${tsh(principal)}
+debts_page.dart:130: Pokea malipo
+debts_page.dart:139: Tuma ukumbusho
+debts_page.dart:214: Alikopa ${formatWhen(
+debts_page.dart:217: Kilichokopwa ${tsh(asDouble(debt[
+debts_page.dart:218: Baki ${tsh(asDouble(debt[
+debts_page.dart:220: Malipo yaliyopita
+debts_page.dart:221: Bado hajalipa chochote.
+debts_page.dart:226: )} · ${methodLabel(
+debts_page.dart:226: )} · ${pay[
+debts_page.dart:236: Deni nusu
+debts_page.dart:237: Deni zima
+debts_page.dart:251: Analipa sasa
+debts_page.dart:255: Analipa baki yote ${tsh(asDouble(debt[
+debts_page.dart:258: Sasisha deni
+debts_page.dart:287: Malipo yamehifadhiwa
+faults_page.dart:75: Tafuta jina, IMEI au barcode
+faults_page.dart:97: Hakuna yenye matatizo kwenye kundi hili.
+faults_page.dart:191: ]} ${phone[
+faults_page.dart:202: ]} ${product[
+faults_page.dart:208: Gharama ${tsh(asDouble(phone[
+faults_page.dart:220: Gharama ${tsh(asDouble(product[
+faults_page.dart:226: Matatizo ${product[
+faults_page.dart:255: Jumla ${tsh(price)}
+history_page.dart:59: Historia ya mauzo
+history_page.dart:59: Sales history
+history_page.dart:59: Mauzo yangu
+history_page.dart:59: My sales
+history_page.dart:69: Tafuta risiti, mteja, bidhaa
+history_page.dart:114: Hakuna mauzo kwenye chaguo hili.
+history_page.dart:167: Imerudishwa ${tsh(returned)}
+history_page.dart:168: Deni ${tsh(balance)}
+history_page.dart:198: )}  ·  ${sale[
+history_page.dart:227: )} ${sale[
+history_page.dart:248: Idadi ${item[
+history_page.dart:248: ) > 0 ?
+history_page.dart:262: Tuma risiti
+history_page.dart:270: Rudisha bidhaa
+history_page.dart:275: Futa risiti
+history_page.dart:275: Stoo itarudi. Huwezi kufuta kama deni tayari lina malipo.
+history_page.dart:280: Risiti imefutwa
+history_page.dart:325: Bidhaa imerudi
+history_page.dart:332: Thamani ${tsh(outcome.total)}
+history_page.dart:333: Rudisha pesa ${tsh(outcome.refund)}
+history_page.dart:334: Deni lililobaki ${tsh(outcome.debtLeft)}
+history_page.dart:409: Rudisha ${widget.sale[
+history_page.dart:411: Chagua idadi na sababu. Stoo, deni, faida na ripoti zinajisasisha.
+history_page.dart:416: Sababu ya kurudisha
+history_page.dart:419: Vina matatizo
+history_page.dart:420: Vitaingia stoo kama vifaa vyenye matatizo, na gharama yake itaingia kwenye faida.
+history_page.dart:428: Thibitisha marejesho
+history_page.dart:451: Iliyobaki $left
+home_page.dart:56: )} ${tsh(asDouble(debt[
+home_page.dart:56: ]))}. ${tx(
+home_page.dart:57: ]))}. ${formatDay(DateTime.parse(
+home_page.dart:69: Send reminder
+home_page.dart:87: ${store.session?.name ??
+home_page.dart:87: } · ${roleLabel(store.session?.role)}
+home_page.dart:149: Mawinga bado nje
+home_page.dart:149: Items still out
+home_page.dart:151: ${out.length} ${out.length == 1 ? tx(
+home_page.dart:151: ) : tx(
+home_page.dart:168: Mauzo ya siku 7
+home_page.dart:168: Sales, 7 days
+home_page.dart:168: Mauzo yangu, siku 7
+home_page.dart:168: My sales, 7 days
+home_page.dart:170: )} ${tsh(store.todayTotal)} · ${tx(
+home_page.dart:170: )} ${store.todayCount}
+home_page.dart:283: Taarifa nyeti
+home_page.dart:283: Private figures
+home_page.dart:294: Thamani ya stoo
+home_page.dart:294: Stock value
+home_page.dart:303: Faida ya leo
+home_page.dart:303: Profit today
+home_page.dart:305: Phone profit
+home_page.dart:311: Accessory profit
+home_page.dart:313: Fault profit
+home_page.dart:319: Mtaji wa simu
+home_page.dart:319: Phone capital
+home_page.dart:321: Mtaji wa vifaa
+home_page.dart:321: Accessory capital
+home_page.dart:325: Simu zilizopo
+home_page.dart:325: Phones in stock
+more_page.dart:61: Funga na toka
+more_page.dart:61: Lock and leave
+profit_page.dart:92: Simu na vifaa vinahesabiwa kando. Bidhaa zilizoharibika zina gharama yake. Mwisho namba tatu zinaunganishwa kuwa faida ya duka.
+profit_page.dart:96: Hasara ya duka
+profit_page.dart:100: Mauzo, gharama na faida ya simu peke yake.
+profit_page.dart:107: Mauzo, gharama na faida ya vifaa peke yake.
+profit_page.dart:119: Bidhaa zilizoharibika
+profit_page.dart:121: Gharama hii inapunguza faida. Sio mauzo.
+profit_page.dart:123: Mauzo ya matatizo
+profit_page.dart:127: Mtaji wa matatizo uliopo
+profit_page.dart:139: Hesabu ya pamoja
+profit_page.dart:141: Faida ya simu + faida ya vifaa + faida ya matatizo.
+profit_page.dart:158: Faida na gharama
+profit_page.dart:161: Hakuna mauzo kipindi hiki.
+profit_page.dart:179: Gharama ya simu na vifaa
+profit_page.dart:193: Kwa mwezi
+profit_page.dart:193: Kwa siku
+profit_page.dart:196: Hakuna mauzo.
+profit_page.dart:266: Gharama ya zilizouzwa
+profit_page.dart:269: Mtaji uliopo sasa
+profit_page.dart:379: Ripoti hii haipo kwa akaunti hii.
+reports_page.dart:31: Stoo ndogo
+reports_page.dart:32: Mwendo wa stoo
+reports_page.dart:116: Imenakiliwa. Bandika kwenye daftari.
+reports_page.dart:135: Hakuna kumbukumbu.
+scan_page.dart:8: Ongeza kwenye kikapu
+scan_page.dart:41: Skani msimbo
+scan_page.dart:66: Ruhusu kamera ili skana iwashe. Bonyeza Ruhusu, kisha kubali kamera kwenye simu.
+scan_page.dart:67: Kamera haijawaka. Andika IMEI hapa chini, au jaribu tena.
+scan_page.dart:74: Ruhusu kamera
+scan_page.dart:74: Jaribu tena
+scan_page.dart:92: Au andika msimbo
+scan_page.dart:94: IMEI au barcode
+sell_page.dart:80: Hakuna bidhaa kwenye kundi hili. Ongeza kwenye Stoo.
+sell_page.dart:190: } · ${phone[
+sell_page.dart:238: Nayo ${product[
+sell_page.dart:238: Stoo ${product[
+sell_page.dart:270: $priceLabel ${tsh(price)}
+sell_page.dart:346: Futa vyote
+sell_page.dart:437: Badilisha bei
+sell_page.dart:437: Bei ya kuuza
+sell_page.dart:445: Bei hii ndiyo itahesabiwa kwenye mauzo, deni, na faida.
+sell_page.dart:445: Bei ya jumla ni mwongozo. Andika bei unayomuuzia mteja huyu.
+sell_page.dart:449: Anachotakiwa kulipa
+sell_page.dart:521: ${line.name} · Matatizo
+sell_page.dart:522: Bei ${tsh(line.price)} · ${tsh(line.lineTotal)}
+sell_page.dart:522: ${maskImei(line.imei!)} · ${tsh(line.price)}
+sell_page.dart:599: Thibitisha · rudisha ${tsh(change)}
+sell_page.dart:601: Thibitisha · deni ${tsh(debt)}
+sell_page.dart:602: Thibitisha mauzo
+sell_page.dart:611: Jina la mteja
+sell_page.dart:615: Simu ya mteja
+sell_page.dart:643: Anakopa kwa muda gani?
+sell_page.dart:645: Chini ya mwezi, ukumbusho siku 1 kabla. Mwezi au zaidi, siku 3 kabla.
+sell_page.dart:666: Kumbukumbu namba (si lazima)
+sell_page.dart:711: Deni litabaki
+sell_page.dart:733: Andika alichotoa mteja. Sahihi ikiwa amelipa kiasi chote.
+sell_page.dart:821: Mteja alipe namba hii, nje ya simu hii
+sell_page.dart:827: Weka Lipa Namba kwenye mipangilio
+settings_page.dart:171: Weka logo
+settings_page.dart:171: Add logo
+settings_page.dart:171: Badilisha logo
+settings_page.dart:171: Change logo
+settings_page.dart:176: Ondoa logo
+settings_page.dart:176: Remove logo
+settings_page.dart:180: Jina la duka
+settings_page.dart:180: Shop name
+settings_page.dart:182: Mahali / mtaa
+settings_page.dart:184: Shop phone
+settings_page.dart:186: Ujumbe wa chini ya risiti
+settings_page.dart:186: Receipt footer
+settings_page.dart:200: Kompyuta ya duka
+settings_page.dart:200: Shop address
+settings_page.dart:202: Neno la kuunganisha simu
+settings_page.dart:202: Connecting word
+settings_page.dart:232: Weka picha yangu
+settings_page.dart:232: Add my photo
+settings_page.dart:232: Badilisha picha yangu
+settings_page.dart:232: Change my photo
+settings_page.dart:239: Ondoa picha
+settings_page.dart:239: Remove photo
+settings_page.dart:240: Badilisha PIN
+settings_page.dart:241: Recovery word
+settings_page.dart:305: Funga duka
+settings_page.dart:340: Inakaa juu ya risiti
+settings_page.dart:340: Shown on the receipt
+settings_page.dart:424: Thibitisha PIN
+settings_page.dart:426: PIN ya mmiliki
+settings_page.dart:444: Inahifadhi duka...
+settings_page.dart:466: PIN mpya
+settings_page.dart:469: PIN ya sasa
+settings_page.dart:494: Neno jipya
+settings_page.dart:495: Rudia neno
+settings_page.dart:512: Muuzaji mpya
+settings_page.dart:516: PIN ya tarakimu 4
+settings_page.dart:522: ${values[0].trim()} anaweza kuingia sasa
+settings_page.dart:554: Gharama na faida
+settings_page.dart:555: Historia yote
+settings_page.dart:559: Hariri stoo
+settings_page.dart:571: Hifadhi sehemu
+settings_page.dart:598: PIN ya ${person[
+stock_page.dart:50: Ongeza simu
+stock_page.dart:50: Ongeza kifaa
+stock_page.dart:67: Tafuta stoo
+stock_page.dart:141: Bado hakuna bidhaa.
+stock_page.dart:146: Hakuna vifaa. Mmiliki anaweza kuongeza bidhaa mpya.
+stock_page.dart:160: Hakuna simu kwenye orodha hii.
+stock_page.dart:207: Jumla ${tsh(asDouble(product[
+stock_page.dart:209: Chini · ${product[
+stock_page.dart:221: Ongeza mzigo
+stock_page.dart:249: } · ${widget.store.isOwner && widget.store.revealSensitive ? phone[
+stock_page.dart:249: ] : maskImei(
+stock_page.dart:250: Jumla ${tsh(asDouble(phone[
+stock_page.dart:320: Inaongeza idadi...
+stock_page.dart:324: Idadi imeongezwa. Sasa ni ${current + extra}.
+stock_page.dart:330: Ondoa ${product[
+stock_page.dart:331: Itaondoka kwenye Uza na Stoo. Mauzo, ripoti, na historia ya nyuma vinabaki.
+stock_page.dart:334: Inaondoa bidhaa...
+stock_page.dart:344: Ondoa ${phone[
+stock_page.dart:345: Itaondoka kwenye stoo. Risiti na ripoti za simu zilizouzwa zinabaki.
+stock_page.dart:348: Inaondoa simu...
+stock_page.dart:358: Kundi jipya
+stock_page.dart:358: Jina la kundi
+stock_page.dart:361: Inaongeza kundi...
+stock_page.dart:376: Futa $name
+stock_page.dart:377: Bidhaa za kundi hili zitaingia Nyingine. Mauzo ya zamani yanabaki kwenye ripoti.
+stock_page.dart:380: Inafuta kundi...
+stock_page.dart:384: Kundi limefutwa.
+stock_page.dart:450: ${span ~/ 7}
+stock_page.dart:451: ${span % 7}
+stock_page.dart:488: Bidhaa mpya
+stock_page.dart:488: Hariri bidhaa
+stock_page.dart:507: Ongeza kundi
+stock_page.dart:509: Bei ya jumla
+stock_page.dart:512: Bei ya kuuza inaandikwa ukiuza, kwa kila mteja.
+stock_page.dart:521: Idadi yote
+stock_page.dart:527: Onyo stoo ikifika
+stock_page.dart:541: Kati ya hizi, zenye matatizo
+stock_page.dart:546: Idadi yenye matatizo haiwezi kuzidi idadi yote.
+stock_page.dart:547: Zinauzwa ${_pile - _bad}. Matatizo $_bad zimetolewa kwenye idadi hii hapa hapa. Mfano 20, matatizo 1, zinauzwa 19.
+stock_page.dart:556: Ondoa bidhaa
+stock_page.dart:585: Chagua kundi.
+stock_page.dart:686: Simu mpya
+stock_page.dart:686: Hariri simu
+stock_page.dart:704: Skani IMEI
+stock_page.dart:711: Kundi la simu
+stock_page.dart:716: Storage, mfano 256GB
+stock_page.dart:725: LIKE NEW
+stock_page.dart:725: Kama mpya
+stock_page.dart:734: Bei ya kuuza inaandikwa ukiuza simu hii.
+stock_page.dart:752: Simu ina matatizo
+stock_page.dart:753: Itaingia stoo, haitokei kwenye kuuza, na gharama yake inaingia kwenye faida.
+stock_page.dart:761: Futa simu
+stock_page.dart:776: Weka IMEI
+stock_page.dart:812: Ondoa simu
+stock_page.dart:887: Idadi sasa: ${widget.current}
+stock_page.dart:896: Idadi unayoongeza
+stock_page.dart:898: Itakuwa ${widget.current + adding}
+warranty_page.dart:61: IMEI hii haipo kwenye duka.
+warranty_page.dart:72: Angalia warranty
+warranty_page.dart:97: ]} bado iko dukani. Haijauzwa.
+warranty_page.dart:112: ]} · ${row[
+warranty_page.dart:114: Warranty bado hai · siku $left
+warranty_page.dart:114: Warranty imeisha
+warranty_page.dart:115: Iliuzwa ${formatWhen(start.toIso8601String())}
+warranty_page.dart:116: Inaisha ${formatDay(end)} · ${warrantyWords(days)}
+wings_page.dart:58: Mtu amechukua
+wings_page.dart:64: Tafuta mtu au bidhaa
+wings_page.dart:66: Hakuna bidhaa iliyo nje kwa sasa.
+wings_page.dart:66: Hakuna mawinga yenye neno hilo.
+wings_page.dart:103: Alichukua ${taken == null ?
+wings_page.dart:103: : formatWhen(taken.toIso8601String())}
+wings_page.dart:104: Alirudisha ${formatWhen(returned.toIso8601String())}
+wings_page.dart:105: Aliyeandika ${wing[
+wings_page.dart:149: Amerudi x$back
+wings_page.dart:151: Nje x$left
+wings_page.dart:201: Chagua idadi anayorudisha sasa. Akirudisha kimoja, vilivyobaki vinabaki nje, na muda unaandikwa.
+wings_page.dart:216: Nje x${_left(item)}
+wings_page.dart:224: ] ?? 0}
+wings_page.dart:241: Rudisha zote
+wings_page.dart:247: Hifadhi kurudi
+wings_page.dart:303: Simu · ${maskImei(
+wings_page.dart:319: Andika jina, kisha tafuta bidhaa aliyochukua. Muda unaandikwa peke yake.
+wings_page.dart:321: Jina la mtu
+wings_page.dart:323: Simu (si lazima)
+wings_page.dart:325: Maelezo (si lazima)
+wings_page.dart:327: Tafuta jina au IMEI
+wings_page.dart:330: Umechagua $chosen
+wings_page.dart:333: Hakuna bidhaa dukani ya kuazimisha.
+wings_page.dart:334: Hakuna bidhaa yenye neno hilo.
+shop_db.dart:39: INTEGER NOT NULL DEFAULT 0
+shop_db.dart:46: PRAGMA wal_checkpoint(FULL)
+shop_db.dart:110: key = ?
+shop_db.dart:138: id = ?
+shop_db.dart:163: ${await revision() + 1}
+shop_db.dart:255: created_at DESC
+shop_db.dart:264: debt_id = ?
+shop_db.dart:273: active = 1
+shop_db.dart:273: role DESC, name
+shop_db.dart:341: imei = ? AND status = ?
+shop_db.dart:343: barcode = ? AND active = 1
+shop_db.dart:351: Weka jina la kundi.
+shop_db.dart:365: category_id = ?
+shop_db.dart:388: status = 'OPEN' AND (customer_phone = ? OR customer_name = ?)
+shop_db.dart:451: barcode = ? AND id != ?
+shop_db.dart:500: Imerudi kuuzwa
+shop_db.dart:531: imei = ? AND id != ?
+shop_db.dart:615: ${line.name} tayari imeuza.
+shop_db.dart:621: Stoo ya ${line.name} haitoshi.
+shop_db.dart:628: ${_plain(line.name, 80)} x${line.qty}
+shop_db.dart:678: ${line.name} zimebaki $stock.
+shop_db.dart:705: Deni jipya
+shop_db.dart:706: $safeName anadaiwa TSH ${balance.round()} kwenye $invoice.
+shop_db.dart:712: Mauzo mapya
+shop_db.dart:713: $invoice ${_plain(lines.first.name, 80)} · ${_plain(cashierName, 40)} · ${methodLabel(method)}.
+shop_db.dart:767: Deni limelipwa
+shop_db.dart:767: Malipo ya deni
+shop_db.dart:768: ]} amelipa TSH ${amount.round()}. Baki TSH ${next.round()}.
+shop_db.dart:781: sale_id = ?
+shop_db.dart:813: ]} imefutwa. Bidhaa zimerudi kwenye stoo au matatizo.
+shop_db.dart:840: imei = ?
+shop_db.dart:857: taken_at DESC
+shop_db.dart:862: kind = ?
+shop_db.dart:884: ${pick.name} haiko dukani.
+shop_db.dart:887: Stoo ya ${pick.name} haitoshi.
+shop_db.dart:920: $name amechukua bidhaa. ${_plain(staff, 40)}.
+shop_db.dart:933: wing_id = ?
+shop_db.dart:939: ]} imezidi idadi iliyo nje.
+shop_db.dart:967: ]} x${item[
+shop_db.dart:968: ]} x${asInt(row[
+shop_db.dart:968: ]) - asInt(row[
+shop_db.dart:971: $who amerudisha $came. ${_plain(staff, 40)}.
+shop_db.dart:972: $who amerudisha $came. Bado nje: $leftNames. ${_plain(staff, 40)}.
+shop_db.dart:973: Mawinga yamerudi
+shop_db.dart:991: Andika sababu ya kurudisha.
+shop_db.dart:993: Chagua bidhaa ya kurudisha.
+shop_db.dart:997: Risiti hii imefutwa.
+shop_db.dart:1015: ]} imezidi idadi iliyouzwa.
+shop_db.dart:1020: ]} haiwezi kurudi. Tayari haiko kama iliyouzwa.
+shop_db.dart:1101: sale_id = ? AND status != ?
+shop_db.dart:1118: Mauzo yamerudishwa
+shop_db.dart:1119: ]} · $cleanReason · TSH ${total.round()} · ${_plain(actor, 40)}.
+shop_db.dart:1257: phone = ?
+shop_db.dart:1260: name = ?
+shop_db.dart:1289: kind = ? AND read = 0
+shop_db.dart:1533: REAL NOT NULL DEFAULT 0
+shop_db.dart:1534: INTEGER NOT NULL DEFAULT 3
+shop_db.dart:1536: INTEGER NOT NULL DEFAULT 1
+shop_db.dart:1538: TEXT NOT NULL DEFAULT ''
+shop_db.dart:1622: Power bank
+shop_db.dart:1749: Stand za camera
+shop_db.dart:1775: TEXT NOT NULL DEFAULT 'goods'
+shop_store.dart:137: Siku $count
+shop_store.dart:172: ${formatDay(start)} – ${formatDay(last)}
+shop_store.dart:460: Huna ruhusa ya kurudisha mauzo haya.
+shop_store.dart:722: Mauzo yanaendelea bila mtandao. Cloud itasubiri anwani.
+shop_store.dart:723: Inasawazisha risiti $pendingSync...
+shop_store.dart:724: Cloud imepokea risiti zote.
+shop_store.dart:725: Risiti $pendingSync ziko kwenye simu. Zitaenda cloud mtandao ukirudi.
+shop_store.dart:797: Muuzaji ameingia
+shop_store.dart:798: ${session!.name} amefungua duka.
+shop_store.dart:892: ]} haja rudisha${names.isEmpty ?
+shop_store.dart:984: Kikapu kiko tupu.
+shop_store.dart:985: Chagua aina ya malipo.
+shop_store.dart:988: Kiasi si sahihi.
+shop_store.dart:992: Weka Lipa Namba kwenye mipangilio kwanza.
+shop_store.dart:1003: Deni linahitaji jina na namba ya simu ya mteja.
+shop_store.dart:1006: Weka muda anaokopa. Siku, wiki, au mwezi.
+shop_store.dart:1008: Weka kiasi kilicholipwa, au chagua Deni zima.
+shop_store.dart:1069: Kundi halijahifadhiwa.
+shop_store.dart:1498: vault sync: shop computer not reached
+shop_store.dart:1504: vault sync local=$localRev remote=$remoteRev sales=$remoteSales
+shop_store.dart:1578: Risiti ${rows.length}
+shop_store.dart:1579: Cash ${tsh(cash)}
+shop_store.dart:1580: Lipa Namba ${tsh(lipa)}
+shop_store.dart:1581: Jumla ${tsh(cash + lipa)}
+shop_store.dart:1582: Deni lililobaki ${tsh(debtTotal)}
+shop_store.dart:1583: Faida ya leo ${tsh(todayProfit)}
+shop_store.dart:1584: Aliyeingia ${session?.name ??
+shop_store.dart:1612: $clean anaweza kuuza kwa PIN yake.
+shop_store.dart:1674: Subiri sekunde $left.
+shop_store.dart:1686: Majaribio mengi. Subiri sekunde $wait.
+shop_store.dart:1702: PIN ya zamani si sahihi.
+shop_store.dart:1739: ]} ${sale[
+shop_store.dart:1826: Bado hakuna mauzo katika siku $days zilizopita. Uza bidhaa ya kwanza ili grafu ianze.
+shop_store.dart:1828: Katika siku $days umeuza ${tsh(sum)} kwenye risiti $count.
+shop_store.dart:1829: Faida ${tsh(profit)}.
+shop_store.dart:1834: Leo iko juu ya jana.
+shop_store.dart:1836: Leo iko chini ya jana.
+shop_store.dart:1838: Leo ni sawa na jana.
+shop_store.dart:1841: Bidhaa $lowStockCount ziko chini ya kiwango.
+shop_store.dart:1842: Unaowadai ${tsh(debtTotal)}.
+shop_store.dart:1844: Inaongoza: ${leaders.first.name}.
+shop_store.dart:2125: siku 30 zimepita bila malipo
+shop_store.dart:2125: linakamilika ${formatDay(due)}
+shop_store.dart:2128: ]} $when. Baki ${tsh(asDouble(debt[
+shop_store.dart:2142: ]} zimebaki ${product[
+shop_store.dart:2152: ${value ??
+vault_sync.dart:65: application/json; charset=utf-8
+vault_sync.dart:71: vault sync: ${response.statusCode}
+vault_sync.dart:80: vault sync: $error
+whatsapp.dart:13: Namba haiko sahihi.
+whatsapp.dart:16: Habari Zeyhaan, nahitaji msaada kuhusu PhoneVault.
+whatsapp.dart:18: WhatsApp haikufunguka kwenye simu hii.
+ui.dart:271: Sehemu hii haijawashwa kwa akaunti yako. Mmiliki anaichagua kwenye wafanyakazi.
+ui.dart:271: This part is off for your account. The owner turns it on under staff.
+ui.dart:472: ${digits.substring(0, 4)} ${digits.substring(4)}

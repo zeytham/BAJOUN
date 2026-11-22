@@ -1,8 +1,145 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../lang.dart';
 import '../money.dart';
 import '../theme.dart';
+import 'contacts_pick.dart';
+
+class Notices extends ChangeNotifier {
+  Notices._();
+  static final Notices i = Notices._();
+
+  String? raw;
+  bool bad = false;
+  Timer? _hide;
+
+  void show(String message, {required bool bad}) {
+    raw = message;
+    this.bad = bad;
+    _hide?.cancel();
+    if (!bad) _hide = Timer(const Duration(milliseconds: 2600), clear);
+    notifyListeners();
+  }
+
+  void clear() {
+    _hide?.cancel();
+    if (raw == null) return;
+    raw = null;
+    notifyListeners();
+  }
+
+  void release(String message) {
+    if (!bad || raw == null) return;
+    if (raw == message || speak(raw!) == speak(message)) clear();
+  }
+}
+
+class ChoiceRow extends StatelessWidget {
+  const ChoiceRow({super.key, required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: children,
+        ),
+      ),
+    );
+  }
+}
+
+class NoticeBar extends StatelessWidget {
+  const NoticeBar({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([Notices.i, Lang.i]),
+      builder: (context, _) {
+        final raw = Notices.i.raw;
+        if (raw == null) return const SizedBox.shrink();
+        final bad = Notices.i.bad;
+        final top = MediaQuery.paddingOf(context).top;
+        return Material(
+          color: bad ? const Color(0xFFDC2626) : skyDeep,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(14, top + 8, 4, 10),
+            child: Row(
+              children: [
+                Icon(bad ? Icons.error_outline : Icons.check_circle_outline, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    speak(raw),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.25, fontWeight: FontWeight.w700),
+                  ),
+                ),
+                IconButton(
+                  onPressed: Notices.i.clear,
+                  icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class LiveStrip extends StatelessWidget {
+  const LiveStrip({super.key, required this.text});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: sky,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2.4, color: skyDeep),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: Text(speak(text), style: const TextStyle(color: ink, fontWeight: FontWeight.w600))),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class BusyButton extends StatelessWidget {
+  const BusyButton({super.key, required this.label, required this.onPressed, this.busy = false});
+  final String label;
+  final VoidCallback? onPressed;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton(
+      onPressed: busy ? null : onPressed,
+      child: busy
+          ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
+          : Text(label),
+    );
+  }
+}
 
 class FaceBubble extends StatelessWidget {
   const FaceBubble({
@@ -27,10 +164,27 @@ class FaceBubble extends StatelessWidget {
     return CircleAvatar(
       radius: radius,
       backgroundColor: color,
-      backgroundImage: bytes == null ? null : MemoryImage(bytes!),
       child: bytes == null
           ? Text(letter, style: TextStyle(color: letterColor, fontWeight: FontWeight.w700, fontSize: radius * 0.72))
-          : null,
+          : ClipOval(
+              child: Image.memory(
+                bytes!,
+                width: radius * 2,
+                height: radius * 2,
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+                frameBuilder: (context, child, frame, sync) {
+                  if (sync || frame != null) return child;
+                  return Center(
+                    child: SizedBox(
+                      width: radius,
+                      height: radius,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: letterColor),
+                    ),
+                  );
+                },
+              ),
+            ),
     );
   }
 }
@@ -100,6 +254,51 @@ class QuickCircle extends StatelessWidget {
   }
 }
 
+class LangDots extends StatelessWidget {
+  const LangDots({super.key, required this.current, required this.onPick, this.light = false});
+  final String current;
+  final ValueChanged<String> onPick;
+  final bool light;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _mark('sw', 'SW'),
+        _mark('en', 'EN'),
+        _mark('ar', 'ع'),
+      ],
+    );
+  }
+
+  Widget _mark(String code, String mark) {
+    final on = current == code;
+    final inkOn = light ? Colors.white : (on ? Colors.white : skyDeep);
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Tooltip(
+        message: code == 'sw' ? 'Kiswahili' : code == 'en' ? 'English' : 'العربية',
+        child: InkWell(
+          onTap: () => onPick(code),
+          customBorder: const CircleBorder(),
+          child: Container(
+            width: 42,
+            height: 42,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: on ? (light ? Colors.white24 : skyDeep) : (light ? Colors.transparent : Colors.white),
+              shape: BoxShape.circle,
+              border: Border.all(color: light ? Colors.white70 : (on ? skyDeep : const Color(0xFFD7E8D4))),
+            ),
+            child: Text(mark, style: TextStyle(color: inkOn, fontWeight: FontWeight.w800, fontSize: code == 'ar' ? 18 : 12)),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class LockedNote extends StatelessWidget {
   const LockedNote({super.key, required this.title});
   final String title;
@@ -114,10 +313,10 @@ class LockedNote extends StatelessWidget {
           const SizedBox(height: 12),
           Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: ink)),
           const SizedBox(height: 8),
-          const Text(
-            'Sehemu hii haijawashwa kwa akaunti yako. Mmiliki anaichagua kwenye wafanyakazi.',
+          Text(
+            tx('Sehemu hii haijawashwa kwa akaunti yako. Mmiliki anaichagua kwenye wafanyakazi.', 'This part is off for your account. The owner turns it on under staff.'),
             textAlign: TextAlign.center,
-            style: TextStyle(color: muted, height: 1.4),
+            style: const TextStyle(color: muted, height: 1.4),
           ),
         ],
       ),
@@ -145,8 +344,8 @@ Future<bool> confirm(BuildContext context, String title, String body) async {
       title: Text(title),
       content: Text(body),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Ghairi')),
-        FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Endelea')),
+        TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tx('Ghairi', 'Cancel'))),
+        FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(tx('Endelea', 'Continue'))),
       ],
     ),
   );
@@ -154,7 +353,33 @@ Future<bool> confirm(BuildContext context, String title, String body) async {
 }
 
 void toast(BuildContext context, String message) {
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  final raw = sourceOf(message);
+  Notices.i.show(raw, bad: isProblem(raw));
+}
+
+class HoldPhoto extends StatelessWidget {
+  const HoldPhoto({super.key, required this.bytes, this.fit = BoxFit.contain, this.empty});
+
+  final Uint8List? bytes;
+  final BoxFit fit;
+  final Widget? empty;
+
+  @override
+  Widget build(BuildContext context) {
+    if (bytes == null) return empty ?? const SizedBox.shrink();
+    return Image.memory(
+      bytes!,
+      fit: fit,
+      gaplessPlayback: true,
+      filterQuality: FilterQuality.high,
+      frameBuilder: (context, child, frame, sync) {
+        if (sync || frame != null) return child;
+        return const Center(
+          child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.4, color: skyDeep)),
+        );
+      },
+    );
+  }
 }
 
 class SoftField extends StatefulWidget {
@@ -168,6 +393,8 @@ class SoftField extends StatefulWidget {
     this.maxLength,
     this.digitsOnly = false,
     this.phone = false,
+    this.contacts = false,
+    this.nameWith,
     this.minDigits,
     this.rule,
   });
@@ -180,6 +407,8 @@ class SoftField extends StatefulWidget {
   final int? maxLength;
   final bool digitsOnly;
   final bool phone;
+  final bool contacts;
+  final TextEditingController? nameWith;
   final int? minDigits;
   final String? rule;
 
@@ -216,32 +445,50 @@ class _SoftFieldState extends State<SoftField> {
   }
 
   void _changed() {
+    _releaseNotice();
     if (mounted) setState(() {});
   }
 
-  void _focusChanged() {
-    if (!_focus.hasFocus && mounted) setState(() => _checked = true);
+  void _releaseNotice() {
+    final raw = Notices.i.raw;
+    if (raw == null || !Notices.i.bad || _problem() != null) return;
+    if (widget.rule != null) Notices.i.release(widget.rule!);
+    if (widget.phone) {
+      Notices.i.release(t('Namba ianze na 0 na iwe tarakimu 10.'));
+      Notices.i.release('Number must start with 0 and have 10 digits.');
+    }
+    final current = Notices.i.raw;
+    if (_focus.hasFocus && current != null && current.startsWith('Weka ') && widget.controller.text.trim().isNotEmpty) {
+      Notices.i.clear();
+    }
   }
 
-  String? get _error {
+  String? _problem() {
     final digits = widget.controller.text.replaceAll(RegExp(r'\D'), '');
     if (widget.phone) {
-      if (!_checked || digits.isEmpty) return null;
-      if (!isTzPhone(digits)) return 'Namba ianze na 0 na iwe tarakimu 10.';
+      if (digits.isEmpty) return null;
+      if (!isTzPhone(digits)) return tx('Namba ianze na 0 na iwe tarakimu 10.', 'Number must start with 0 and have 10 digits.');
       return null;
     }
-    if (!_checked || widget.rule == null || widget.minDigits == null) return null;
+    if (widget.rule == null || widget.minDigits == null) return null;
     if (digits.isEmpty) return null;
     final maxDigits = widget.maxLength ?? 15;
     if (digits.length < widget.minDigits! || digits.length > maxDigits) return widget.rule;
     return null;
   }
 
+  void _focusChanged() {
+    if (!_focus.hasFocus && mounted) setState(() => _checked = true);
+  }
+
+  String? get _error => _checked ? _problem() : null;
+
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: widget.controller,
       focusNode: _focus,
+      textDirection: widget.phone || widget.digitsOnly ? TextDirection.ltr : null,
       keyboardType: widget.keyboard,
       obscureText: widget.obscure,
       readOnly: widget.readOnly,
@@ -254,8 +501,20 @@ class _SoftFieldState extends State<SoftField> {
       decoration: InputDecoration(
         labelText: widget.label,
         counterText: '',
-        errorText: _error,
+        errorText: _error == null ? null : speak(_error!),
         errorMaxLines: 2,
+        suffixIcon: widget.contacts
+            ? IconButton(
+                tooltip: t('Chagua contact'),
+                onPressed: widget.readOnly
+                    ? null
+                    : () async {
+                        final error = await fillFromContacts(context, widget.controller, name: widget.nameWith);
+                        if (error != null && context.mounted) toast(context, error);
+                      },
+                icon: const Icon(Icons.contacts_outlined, color: skyDeep),
+              )
+            : null,
       ),
     );
   }
@@ -333,13 +592,15 @@ class _FieldDialogState extends State<FieldDialog> {
               obscure: widget.fields[i].obscure,
               digitsOnly: widget.fields[i].number,
               phone: widget.fields[i].phone,
+              contacts: widget.fields[i].phone,
+              nameWith: i > 0 && !widget.fields[i - 1].phone ? _controllers[i - 1] : null,
               maxLength: widget.fields[i].maxLength,
             ),
           ],
         ],
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Ghairi')),
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(tx('Ghairi', 'Cancel'))),
         FilledButton(
           onPressed: () {
             final values = [for (final controller in _controllers) controller.text];

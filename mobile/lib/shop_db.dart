@@ -21,10 +21,13 @@ class ShopDb {
   static Future<Database> _openFile(String file) {
     return openDatabase(
       file,
-      version: 8,
+      version: 14,
       onCreate: (db, version) async {
         await _create(db);
         await _seed(db);
+      },
+      onOpen: (db) async {
+        await _speedIndexes(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) await _upgrade(db);
@@ -34,31 +37,63 @@ class ShopDb {
         if (oldVersion < 6) await _upgradeVariant(db);
         if (oldVersion < 7) await _upgradeReturns(db);
         if (oldVersion < 8) await _upgradeFaces(db);
+        if (oldVersion < 9) await _upgradeKinds(db);
+        if (oldVersion < 10) await _upgradeBooks(db);
+        if (oldVersion < 11) await _addColumn(db, 'sale_items', 'faulty', 'INTEGER NOT NULL DEFAULT 0');
+        if (oldVersion < 12) await _addColumn(db, 'wing_items', 'returned_qty', 'INTEGER NOT NULL DEFAULT 0');
+        if (oldVersion < 13) {
+          await _addColumn(db, 'phone_units', 'ram', "TEXT NOT NULL DEFAULT ''");
+          await _addColumn(db, 'phone_units', 'screen', "TEXT NOT NULL DEFAULT ''");
+        }
+        if (oldVersion < 14) {
+          await _addColumn(db, 'products', 'storage', "TEXT NOT NULL DEFAULT ''");
+          await _addColumn(db, 'products', 'ram', "TEXT NOT NULL DEFAULT ''");
+          await _addColumn(db, 'products', 'screen', "TEXT NOT NULL DEFAULT ''");
+          await _addColumn(db, 'products', 'condition', "TEXT NOT NULL DEFAULT ''");
+        }
       },
     );
   }
 
   Future<String> exportCopy() async {
-    await db.rawQuery('PRAGMA wal_checkpoint(FULL)');
     final dir = await getTemporaryDirectory();
     final stamp = DateTime.now().toIso8601String().replaceAll(':', '-');
-    final dest = File(p.join(dir.path, 'phonevault-$stamp.db'));
-    await File(await filePath()).copy(dest.path);
-    return dest.path;
+    final dest = p.join(dir.path, 'phonevault-$stamp.db');
+    final file = File(dest);
+    if (await file.exists()) await file.delete();
+    final sqlPath = dest.replaceAll('\\', '/').replaceAll("'", "''");
+    try {
+      await db.execute("VACUUM INTO '$sqlPath'");
+      if (await file.exists() && await file.length() > 0) return dest;
+    } catch (_) {}
+    await db.rawQuery('PRAGMA wal_checkpoint(FULL)');
+    await File(await filePath()).copy(dest);
+    return dest;
   }
 
   Future<String?> restoreCopy(String sourcePath) async {
+    final source = File(sourcePath);
+    if (!await source.exists() || await source.length() < 16) return 'Faili hii haikusomeka.';
+    final dir = await getTemporaryDirectory();
+    final probePath = p.join(dir.path, 'phonevault-probe.db');
+    final probeFile = File(probePath);
+    if (await probeFile.exists()) await probeFile.delete();
+    await source.copy(probePath);
     Database? probe;
     try {
-      probe = await openDatabase(sourcePath, readOnly: true, singleInstance: false);
+      probe = await openDatabase(probePath, readOnly: true, singleInstance: false);
       final tables = await probe.rawQuery("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'sales'");
       if (tables.isEmpty) return 'Faili hii si nakala ya PhoneVault.';
       final version = await probe.getVersion();
-      if (version > 8) return 'Nakala hii inatoka kwenye toleo jipya. Sasisha app kwanza.';
+      if (version > 14) return 'Nakala hii inatoka kwenye toleo jipya. Sasisha app kwanza.';
     } catch (_) {
       return 'Faili hii si nakala ya PhoneVault.';
     } finally {
       await probe?.close();
+      for (final extra in [probePath, '$probePath-wal', '$probePath-shm']) {
+        final file = File(extra);
+        if (await file.exists()) await file.delete();
+      }
     }
 
     final target = await filePath();
@@ -110,6 +145,13 @@ class ShopDb {
 
   Future<void> setMeta(String key, String value) async {
     await db.insert('meta', {'key': key, 'value': value}, conflictAlgorithm: ConflictAlgorithm.replace);
+    const stamped = {'shop_name', 'shop_location', 'shop_phone', 'receipt_footer', 'lipa_namba', 'shop_logo', 'ui_lang', 'pin_recovery_hash', 'pin_recovery_salt', 'pin_recovery_fails', 'pin_recovery_until', 'gone_categories', 'gone_customers'};
+    if (!stamped.contains(key)) return;
+    await db.insert(
+      'meta',
+      {'key': '${key}__at', 'value': DateTime.now().toUtc().toIso8601String()},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   Future<String> deviceId() async {
@@ -141,6 +183,9 @@ class ShopDb {
     'stock_moves',
     'staff',
     'notifications',
+    'faults',
+    'wings',
+    'wing_items',
   ];
 
   Future<int> revision() async => int.tryParse(await meta('vault_revision') ?? '') ?? 0;
@@ -154,11 +199,36 @@ class ShopDb {
     for (final table in replicaTables) {
       data[table] = await db.query(table);
     }
-    data['meta'] = await db.query('meta');
+    final metas = await db.query('meta');
+    data['meta'] = metas.where((row) {
+      final key = '${row['key']}';
+      return key != 'cloud_url' && key != 'sync_token' && key != 'cloud_url__at' && key != 'sync_token__at';
+    }).toList();
     return data;
   }
 
+  Future<Set<String>> _newerShopKeys(Map<String, dynamic> snapshot) async {
+    const keys = ['shop_name', 'shop_location', 'shop_phone', 'receipt_footer', 'lipa_namba', 'shop_logo'];
+    final metas = snapshot['meta'];
+    final skip = <String>{};
+    if (metas is! List) return skip;
+    for (final key in keys) {
+      final local = DateTime.tryParse(await meta('${key}__at') ?? '');
+      if (local == null) continue;
+      DateTime? incoming;
+      for (final row in metas) {
+        if (row is Map && '${row['key']}' == '${key}__at') incoming = DateTime.tryParse('${row['value']}');
+      }
+      if (incoming == null || local.isAfter(incoming)) {
+        skip.add(key);
+        skip.add('${key}__at');
+      }
+    }
+    return skip;
+  }
+
   Future<void> applySnapshot(Map<String, dynamic> snapshot) async {
+    final keepLocal = await _newerShopKeys(snapshot);
     await db.transaction((txn) async {
       for (final table in replicaTables.reversed) {
         final rows = snapshot[table];
@@ -168,13 +238,31 @@ class ShopDb {
           if (row is! Map) continue;
           final values = _row(row);
           if (table == 'staff' && values['photo'] == null) values['photo'] = '';
+          if (table == 'categories' && '${values['kind'] ?? ''}'.isEmpty) {
+            values['kind'] = values['id'] == 'phones' ? 'phone' : 'goods';
+          }
+          if (table == 'phone_units' && values['category_id'] == null) values['category_id'] = '';
+          if (table == 'products') {
+            values['warranty_days'] ??= 0;
+            values['fault_qty'] ??= 0;
+          }
+          if (table == 'phone_units' || table == 'sale_items') values['warranty_days'] ??= 0;
+          if (table == 'sale_items') values['faulty'] ??= 0;
+          if (table == 'debts') {
+            values['due_at'] ??= '';
+            values['term_days'] ??= 0;
+            values['term_unit'] ??= '';
+          }
+          if (table == 'return_items') values['faulty'] ??= 0;
+          if (table == 'wings') values['returned_at'] ??= '';
+          if (table == 'wing_items') values['returned_qty'] ??= 0;
           await txn.insert(table, values);
         }
       }
       final metas = snapshot['meta'];
       if (metas is List) {
         for (final row in metas) {
-          if (row is Map && row['key'] != 'device_id') {
+          if (row is Map && _keepMeta('${row['key']}') && !keepLocal.contains('${row['key']}')) {
             await txn.insert('meta', _row(row), conflictAlgorithm: ConflictAlgorithm.replace);
           }
         }
@@ -206,6 +294,8 @@ class ShopDb {
   Future<List<Map<String, Object?>>> debtPayments(String debtId) {
     return db.query('debt_payments', where: 'debt_id = ?', whereArgs: [debtId], orderBy: 'created_at DESC');
   }
+
+  Future<List<Map<String, Object?>>> allDebtPayments() => db.query('debt_payments');
 
   Future<List<Map<String, Object?>>> notes() => db.query('notifications', orderBy: 'created_at DESC');
 
@@ -286,14 +376,15 @@ class ShopDb {
     return null;
   }
 
-  Future<({String? id, String? error, bool existed})> saveCategory(String name) async {
+  Future<({String? id, String? error, bool existed})> saveCategory(String name, {String kind = 'goods'}) async {
     final clean = name.trim();
+    final group = kind == 'phone' ? 'phone' : 'goods';
     if (clean.isEmpty) return (id: null, error: 'Weka jina la kundi.', existed: false);
     final id = _slug(clean);
     final existing = await db.query('categories', where: 'id = ?', whereArgs: [id]);
     if (existing.isNotEmpty) return (id: id, error: null, existed: true);
     await _forgetGone('gone_categories', id);
-    await db.insert('categories', {'id': id, 'name': clean, 'slug': id});
+    await db.insert('categories', {'id': id, 'name': clean, 'slug': id, 'kind': group});
     await bumpRevision();
     return (id: id, error: null, existed: false);
   }
@@ -372,6 +463,7 @@ class ShopDb {
     required String barcode,
     required int reorder,
     required int warranty,
+    int faultQty = 0,
     String color = '',
     String size = '',
     String actor = '',
@@ -382,7 +474,8 @@ class ShopDb {
     if (moneyError != null) return moneyError;
     if (stock < 0 || stock > 100000) return 'Idadi si sahihi.';
     if (reorder < 0 || reorder > 100000) return 'Kiwango cha onyo si sahihi.';
-    if (warranty < 0 || warranty > 60) return 'Warranty iwe miezi 0 hadi 60.';
+    if (warranty < 0 || warranty > 730) return 'Warranty iwe siku 0 hadi 730, kwa wiki na siku.';
+    if (faultQty < 0 || faultQty > 100000) return 'Idadi yenye matatizo si sahihi.';
     final code = barcode.trim();
     if (code.isNotEmpty && !RegExp(r'^[A-Za-z0-9-]{3,32}$').hasMatch(code)) return 'Barcode si sahihi.';
     if (code.isNotEmpty) {
@@ -399,18 +492,25 @@ class ShopDb {
       'stock': stock,
       'barcode': code,
       'reorder_level': reorder,
-      'warranty_months': warranty,
+      'warranty_months': 0,
+      'warranty_days': warranty,
+      'fault_qty': faultQty,
       'active': 1,
       'color': _plain(color, 30),
       'size': _plain(size, 30),
     };
     var previous = 0;
+    var previousFault = 0;
     if (id != null) {
       final existing = await db.query('products', where: 'id = ?', whereArgs: [id]);
-      if (existing.isNotEmpty) previous = (existing.first['stock'] as num).toInt();
+      if (existing.isNotEmpty) {
+        previous = (existing.first['stock'] as num).toInt();
+        previousFault = asInt(existing.first['fault_qty']);
+      }
     }
+    final productId = id ?? _id();
     if (id == null) {
-      await db.insert('products', {'id': _id(), ...values});
+      await db.insert('products', {'id': productId, ...values});
     } else {
       await db.update('products', values, where: 'id = ?', whereArgs: [id]);
     }
@@ -418,8 +518,123 @@ class ShopDb {
     if (delta != 0) {
       await recordMove(name: clean, delta: delta, reason: id == null ? 'MZIGO' : 'MAREKEBISHO', staff: actor);
     }
+    final freshFault = id == null ? faultQty : faultQty - previousFault;
+    if (freshFault != 0) {
+      await _fault(
+        db,
+        name: clean,
+        qty: freshFault,
+        cost: cost,
+        source: 'MPYA',
+        productId: productId,
+        staff: actor,
+        note: freshFault < 0 ? 'Imerudi kuuzwa' : '',
+      );
+    }
     await bumpRevision();
     return null;
+  }
+
+  Future<String?> savePhoneGroup({
+    String? id,
+    required String name,
+    required String categoryId,
+    required String color,
+    required String storage,
+    required String ram,
+    required String screen,
+    required String condition,
+    required double price,
+    required double cost,
+    required int stock,
+    required int reorder,
+    required int warranty,
+    int faultQty = 0,
+    String actor = '',
+  }) async {
+    final clean = _plain(name, 80);
+    if (clean.isEmpty) return 'Weka jina la bidhaa.';
+    final moneyError = _moneyOk(price, cost);
+    if (moneyError != null) return moneyError;
+    if (stock < 0 || stock > 100000) return 'Idadi si sahihi.';
+    if (reorder < 0 || reorder > 100000) return 'Kiwango cha onyo si sahihi.';
+    if (warranty < 0 || warranty > 730) return 'Warranty iwe siku 0 hadi 730, kwa wiki na siku.';
+    if (faultQty < 0 || faultQty > 100000) return 'Idadi yenye matatizo si sahihi.';
+    if (faultQty > stock) return 'Idadi yenye matatizo haiwezi kuzidi idadi yote.';
+    final values = {
+      'name': clean,
+      'type': 'PHONE',
+      'category_id': categoryId,
+      'brand': '',
+      'price': price,
+      'cost': cost,
+      'stock': stock,
+      'barcode': '',
+      'reorder_level': reorder,
+      'warranty_months': 0,
+      'warranty_days': warranty,
+      'fault_qty': faultQty,
+      'active': 1,
+      'color': _plain(color, 30),
+      'size': '',
+      'storage': _plain(storage, 20),
+      'ram': _plain(ram, 20),
+      'screen': _plain(screen, 20),
+      'condition': _plain(condition, 20),
+    };
+    var previous = 0;
+    var previousFault = 0;
+    if (id != null) {
+      final existing = await db.query('products', where: 'id = ?', whereArgs: [id]);
+      if (existing.isEmpty) return 'Bidhaa haipo.';
+      if ('${existing.first['type']}' != 'PHONE') return 'Bidhaa haipo.';
+      previous = asInt(existing.first['stock']);
+      previousFault = asInt(existing.first['fault_qty']);
+    }
+    final productId = id ?? _id();
+    if (id == null) {
+      await db.insert('products', {'id': productId, ...values});
+    } else {
+      await db.update('products', values, where: 'id = ?', whereArgs: [id]);
+    }
+    final delta = id == null ? stock : stock - previous;
+    if (delta != 0) {
+      await recordMove(name: clean, delta: delta, reason: id == null ? 'MZIGO' : 'MAREKEBISHO', staff: actor);
+    }
+    final freshFault = id == null ? faultQty : faultQty - previousFault;
+    if (freshFault != 0) {
+      await _fault(
+        db,
+        name: clean,
+        qty: freshFault,
+        cost: cost,
+        source: 'MPYA',
+        productId: productId,
+        staff: actor,
+        note: freshFault < 0 ? 'Imerudi kuuzwa' : '',
+      );
+    }
+    await bumpRevision();
+    return null;
+  }
+
+  Future<bool> imeiHeld(String imei) => _imeiHeld(db, imei.trim());
+
+  Future<bool> _imeiHeld(DatabaseExecutor exec, String imei) async {
+    if (imei.isEmpty) return false;
+    final units = await exec.query('phone_units', where: 'imei = ?', whereArgs: [imei]);
+    if (units.isNotEmpty) return true;
+    final rows = await exec.rawQuery('''
+      SELECT si.qty,
+        (SELECT COALESCE(SUM(ri.qty), 0) FROM return_items ri WHERE ri.sale_item_id = si.id) AS back
+      FROM sale_items si
+      JOIN sales s ON s.id = si.sale_id
+      WHERE si.imei = ? AND s.voided = 0
+    ''', [imei]);
+    for (final row in rows) {
+      if (asInt(row['qty']) > asInt(row['back'])) return true;
+    }
+    return false;
   }
 
   Future<String?> savePhone({
@@ -428,11 +643,15 @@ class ShopDb {
     required String imei,
     required String color,
     required String storage,
+    String ram = '',
+    String screen = '',
     required String condition,
     required double price,
     required double cost,
     required double floor,
     required int warranty,
+    bool faulty = false,
+    String categoryId = '',
     String actor = '',
   }) async {
     final clean = _plain(name, 80);
@@ -442,7 +661,7 @@ class ShopDb {
     final moneyError = _moneyOk(price, cost);
     if (moneyError != null) return moneyError;
     if (floor < 0 || floor > 100000000) return 'Bei ya chini si sahihi.';
-    if (warranty < 0 || warranty > 60) return 'Warranty iwe miezi 0 hadi 60.';
+    if (warranty < 0 || warranty > 730) return 'Warranty iwe siku 0 hadi 730, kwa wiki na siku.';
     if (condition != 'NEW' && condition != 'LIKE NEW' && condition != 'USED') return 'Hali ya simu si sahihi.';
     final clash = await db.query('phone_units', where: 'imei = ? AND id != ?', whereArgs: [code, id ?? '']);
     if (clash.isNotEmpty) return 'IMEI hii tayari ipo.';
@@ -451,17 +670,31 @@ class ShopDb {
       'imei': code,
       'color': color.trim(),
       'storage': storage.trim(),
+      'ram': _plain(ram, 20),
+      'screen': _plain(screen, 20),
       'condition': condition,
       'price': price,
       'cost': cost,
       'floor_price': floor <= 0 ? price : floor,
-      'warranty_months': warranty,
+      'warranty_months': 0,
+      'warranty_days': warranty,
+      'category_id': categoryId,
     };
     if (id == null) {
-      await db.insert('phone_units', {'id': _id(), 'status': 'IN_STOCK', ...values});
+      final phoneId = _id();
+      await db.insert('phone_units', {'id': phoneId, 'status': faulty ? 'FAULTY' : 'IN_STOCK', ...values});
       await recordMove(name: clean, delta: 1, reason: 'MZIGO', staff: actor);
+      if (faulty) await _fault(db, name: clean, qty: 1, cost: cost, source: 'MPYA', phoneId: phoneId, staff: actor, note: '');
     } else {
+      final existing = await db.query('phone_units', where: 'id = ?', whereArgs: [id]);
+      final status = existing.isEmpty ? 'IN_STOCK' : '${existing.first['status']}';
+      if (status != 'SOLD' && status != 'WING') {
+        values['status'] = faulty ? 'FAULTY' : (status == 'FAULTY' ? 'IN_STOCK' : status);
+      }
       await db.update('phone_units', values, where: 'id = ?', whereArgs: [id]);
+      if (faulty && status != 'FAULTY' && status != 'SOLD' && status != 'WING') {
+        await _fault(db, name: clean, qty: 1, cost: cost, source: 'MPYA', phoneId: id, staff: actor, note: '');
+      }
     }
     await bumpRevision();
     return null;
@@ -506,26 +739,36 @@ class ShopDb {
     required String cashierId,
     required String cashierName,
     required List<CartLine> lines,
+    int termDays = 0,
+    String termUnit = '',
   }) async {
     try {
       await db.transaction((txn) async {
         for (final line in lines) {
           if (line.phoneId != null) {
             final rows = await txn.query('phone_units', where: 'id = ?', whereArgs: [line.phoneId]);
-            if (rows.isEmpty || rows.first['status'] != 'IN_STOCK') {
+            final ready = line.faulty ? 'FAULTY' : 'IN_STOCK';
+            if (rows.isEmpty || rows.first['status'] != ready) {
               throw StateError('${line.name} tayari imeuza.');
             }
           } else if (line.productId != null) {
             final rows = await txn.query('products', where: 'id = ?', whereArgs: [line.productId]);
-            final stock = (rows.first['stock'] as num).toInt();
+            if (rows.isEmpty) throw StateError('Bidhaa haipo.');
+            final stock = (rows.first[line.faulty ? 'fault_qty' : 'stock'] as num).toInt();
             if (stock < line.qty) throw StateError('Stoo ya ${line.name} haitoshi.');
+            final imei = (line.imei ?? '').trim();
+            if (imei.isNotEmpty && await _imeiHeld(txn, imei)) throw StateError('IMEI hii tayari ipo.');
           }
         }
         final balance = max(0, total - paid);
         final safeName = _plain(customerName, 60);
         final safePhone = customerPhone.replaceAll(RegExp(r'\D'), '');
         final safeRef = _plain(lipaRef, 40);
-        final summary = lines.map((line) => line.qty > 1 ? '${_plain(line.name, 80)} x${line.qty}' : _plain(line.name, 80)).join(', ');
+        final summary = lines.map((line) {
+          final name = _plain(line.name, 80);
+          final imei = (line.imei ?? '').trim();
+          return imei.isEmpty ? '${line.qty} $name' : '${line.qty} $name $imei';
+        }).join(', ');
         await txn.insert('sales', {
           'id': id,
           'invoice': invoice,
@@ -555,12 +798,16 @@ class ShopDb {
             'imei': line.imei,
             'product_id': line.productId,
             'phone_id': line.phoneId,
-            'warranty_months': line.warrantyMonths,
+            'warranty_months': 0,
+            'warranty_days': line.warrantyDays > 0 ? line.warrantyDays : line.warrantyMonths * 30,
             'category_name': line.categoryName,
+            'faulty': line.faulty ? 1 : 0,
           });
-          await _move(txn, name: line.name, delta: -line.qty, reason: 'MAUZO', staff: cashierName);
+          if (!line.faulty) await _move(txn, name: line.name, delta: -line.qty, reason: 'MAUZO', staff: cashierName);
           if (line.phoneId != null) {
             await txn.update('phone_units', {'status': 'SOLD'}, where: 'id = ?', whereArgs: [line.phoneId]);
+          } else if (line.productId != null && line.faulty) {
+            await txn.rawUpdate('UPDATE products SET fault_qty = MAX(0, fault_qty - ?) WHERE id = ?', [line.qty, line.productId]);
           } else if (line.productId != null) {
             await txn.rawUpdate('UPDATE products SET stock = stock - ? WHERE id = ?', [line.qty, line.productId]);
             final rows = await txn.query('products', where: 'id = ?', whereArgs: [line.productId]);
@@ -592,6 +839,9 @@ class ShopDb {
             'balance': balance,
             'opened_at': DateTime.now().toIso8601String(),
             'status': 'OPEN',
+            'due_at': termDays > 0 ? DateTime.now().add(Duration(days: termDays)).toIso8601String() : '',
+            'term_days': termDays,
+            'term_unit': termUnit,
           });
           await _note(
             txn,
@@ -681,12 +931,18 @@ class ShopDb {
       for (final item in items) {
         final phoneId = item['phone_id'] as String?;
         final productId = item['product_id'] as String?;
+        final faulty = asInt(item['faulty']) == 1;
+        final qty = asInt(item['qty']);
         if (phoneId != null && phoneId.isNotEmpty) {
-          await txn.update('phone_units', {'status': 'IN_STOCK'}, where: 'id = ?', whereArgs: [phoneId]);
+          await txn.update('phone_units', {'status': faulty ? 'FAULTY' : 'IN_STOCK'}, where: 'id = ?', whereArgs: [phoneId]);
         } else if (productId != null && productId.isNotEmpty) {
-          await txn.rawUpdate('UPDATE products SET stock = stock + ? WHERE id = ?', [item['qty'], productId]);
+          if (faulty) {
+            await txn.rawUpdate('UPDATE products SET fault_qty = MIN(100000, fault_qty + ?), active = 1 WHERE id = ?', [qty, productId]);
+          } else {
+            await txn.rawUpdate('UPDATE products SET stock = MIN(100000, stock + ?), active = 1 WHERE id = ?', [qty, productId]);
+          }
         }
-        await _move(txn, name: '${item['name']}', delta: (item['qty'] as num).toInt(), reason: 'RUDISHO', staff: actor);
+        if (!faulty) await _move(txn, name: '${item['name']}', delta: qty, reason: 'RUDISHO', staff: actor);
       }
       await txn.update('sales', {'voided': 1, 'balance': 0}, where: 'id = ?', whereArgs: [saleId]);
       await txn.update('debts', {'status': 'VOID', 'balance': 0}, where: 'sale_id = ?', whereArgs: [saleId]);
@@ -697,7 +953,7 @@ class ShopDb {
     });
     await addNote(
       title: 'Risiti imefutwa',
-      body: '${sales.first['invoice']} imefutwa na stoo imerudishwa.',
+      body: '${sales.first['invoice']} imefutwa. Bidhaa zimerudi kwenye stoo au matatizo.',
       kind: 'VOID:$saleId',
     );
     await bumpRevision();
@@ -706,8 +962,17 @@ class ShopDb {
 
   Future<Map<String, Object?>?> lookupImei(String imei) async {
     final term = imei.trim();
+    final exact = await _lookupImei(term);
+    if (exact != null) return exact;
+    final digits = term.replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty || digits == term) return null;
+    return _lookupImei(digits);
+  }
+
+  Future<Map<String, Object?>?> _lookupImei(String term) async {
+    if (term.isEmpty) return null;
     final sold = await db.rawQuery('''
-      SELECT si.name, si.imei, si.warranty_months, s.created_at, s.customer_name, s.invoice
+      SELECT si.name, si.imei, si.warranty_months, si.warranty_days, s.created_at, s.customer_name, s.invoice
       FROM sale_items si
       JOIN sales s ON s.id = si.sale_id
       WHERE si.imei = ? AND s.voided = 0
@@ -729,6 +994,142 @@ class ShopDb {
   Future<List<Map<String, Object?>>> returns() => db.query('returns', orderBy: 'created_at DESC');
 
   Future<List<Map<String, Object?>>> returnItems() => db.query('return_items');
+
+  Future<List<Map<String, Object?>>> faults() => db.query('faults', orderBy: 'created_at DESC');
+
+  Future<List<Map<String, Object?>>> wings() => db.query('wings', orderBy: 'taken_at DESC');
+
+  Future<List<Map<String, Object?>>> wingItems() => db.query('wing_items');
+
+  Future<bool> hasNote(String kind) async {
+    final rows = await db.query('notifications', columns: ['id'], where: 'kind = ?', whereArgs: [kind], limit: 1);
+    return rows.isNotEmpty;
+  }
+
+  Future<String?> takeWing({
+    required String person,
+    required String phone,
+    required String note,
+    required String staff,
+    required List<WingPick> picks,
+  }) async {
+    final name = _plain(person, 60);
+    if (name.length < 2) return 'Weka jina la mtu aliyechukua.';
+    final safePhone = phone.replaceAll(RegExp(r'\D'), '');
+    if (safePhone.isNotEmpty && !isTzPhone(safePhone)) return 'Namba ianze na 0 na iwe tarakimu 10.';
+    final chosen = picks.where((pick) => pick.qty > 0).toList();
+    if (chosen.isEmpty) return 'Chagua bidhaa aliyochukua.';
+    try {
+      await db.transaction((txn) async {
+        for (final pick in chosen) {
+          if (pick.phoneId != null) {
+            final rows = await txn.query('phone_units', where: 'id = ?', whereArgs: [pick.phoneId]);
+            if (rows.isEmpty || rows.first['status'] != 'IN_STOCK') throw StateError('${pick.name} haiko dukani.');
+          } else if (pick.productId != null) {
+            final rows = await txn.query('products', where: 'id = ?', whereArgs: [pick.productId]);
+            if (rows.isEmpty || asInt(rows.first['stock']) < pick.qty) throw StateError('Stoo ya ${pick.name} haitoshi.');
+          } else {
+            throw StateError('Bidhaa haipo.');
+          }
+        }
+        final id = _id();
+        final when = DateTime.now().toIso8601String();
+        await txn.insert('wings', {
+          'id': id,
+          'person_name': name,
+          'person_phone': safePhone,
+          'note': _plain(note, 80),
+          'status': 'OUT',
+          'taken_at': when,
+          'returned_at': '',
+          'staff_name': _plain(staff, 40),
+        });
+        for (final pick in chosen) {
+          await txn.insert('wing_items', {
+            'id': _id(),
+            'wing_id': id,
+            'name': _plain(pick.name, 80),
+            'qty': pick.qty,
+            'product_id': pick.productId,
+            'phone_id': pick.phoneId,
+          });
+          if (pick.phoneId != null) {
+            await txn.update('phone_units', {'status': 'WING'}, where: 'id = ?', whereArgs: [pick.phoneId]);
+          } else if (pick.productId != null) {
+            await txn.rawUpdate('UPDATE products SET stock = stock - ? WHERE id = ?', [pick.qty, pick.productId]);
+            await _move(txn, name: pick.name, delta: -pick.qty, reason: 'MAWINGA', staff: staff);
+          }
+        }
+        await _note(txn, title: 'Mawinga', body: '$name amechukua bidhaa. ${_plain(staff, 40)}.', kind: 'WING:$id');
+      });
+      await bumpRevision();
+      return null;
+    } on StateError catch (error) {
+      return error.message;
+    }
+  }
+
+  Future<String?> returnWing(String wingId, {required String staff, required Map<String, int> qtyByItem}) async {
+    final rows = await db.query('wings', where: 'id = ?', whereArgs: [wingId]);
+    if (rows.isEmpty) return 'Rekodi haipo.';
+    if (rows.first['status'] != 'OUT') return 'Bidhaa hizi zimesharudishwa.';
+    final items = await db.query('wing_items', where: 'wing_id = ?', whereArgs: [wingId]);
+    final chosen = <Map<String, Object?>>[];
+    for (final item in items) {
+      final want = qtyByItem['${item['id']}'] ?? 0;
+      if (want <= 0) continue;
+      final left = asInt(item['qty']) - asInt(item['returned_qty']);
+      if (want > left) return '${item['name']} imezidi idadi iliyo nje.';
+      chosen.add({...item, 'back': want});
+    }
+    if (chosen.isEmpty) return 'Chagua idadi anayorudisha.';
+    final when = DateTime.now().toIso8601String();
+    await db.transaction((txn) async {
+      for (final item in chosen) {
+        final want = item['back'] as int;
+        final phoneId = '${item['phone_id'] ?? ''}';
+        final productId = '${item['product_id'] ?? ''}';
+        if (phoneId.isNotEmpty) {
+          final units = await txn.query('phone_units', where: 'id = ?', whereArgs: [phoneId]);
+          if (units.isNotEmpty && units.first['status'] != 'SOLD') {
+            await txn.update('phone_units', {'status': 'IN_STOCK'}, where: 'id = ?', whereArgs: [phoneId]);
+          }
+        } else if (productId.isNotEmpty) {
+          final products = await txn.query('products', where: 'id = ?', whereArgs: [productId]);
+          final moveName = products.isEmpty ? '${item['name']}' : '${products.first['name']}';
+          await txn.rawUpdate('UPDATE products SET stock = MIN(100000, stock + ?), active = 1 WHERE id = ?', [want, productId]);
+          await _move(txn, name: moveName, delta: want, reason: 'MAWINGA', staff: staff);
+        }
+        await txn.rawUpdate('UPDATE wing_items SET returned_qty = returned_qty + ? WHERE id = ?', [want, item['id']]);
+      }
+      final fresh = await txn.query('wing_items', where: 'wing_id = ?', whereArgs: [wingId]);
+      final still = fresh.where((row) => asInt(row['qty']) > asInt(row['returned_qty'])).toList();
+      if (still.isEmpty) {
+        await txn.update('wings', {'status': 'BACK', 'returned_at': when}, where: 'id = ?', whereArgs: [wingId]);
+      }
+      final came = chosen.map((item) => '${item['name']} x${item['back']}').join(', ');
+      final leftNames = still.map((row) => '${row['name']} x${asInt(row['qty']) - asInt(row['returned_qty'])}').join(', ');
+      final who = '${rows.first['person_name']}';
+      final body = still.isEmpty
+          ? '$who amerudisha $came. ${_plain(staff, 40)}.'
+          : '$who amerudisha $came. Bado nje: $leftNames. ${_plain(staff, 40)}.';
+      await _note(txn, title: 'Mawinga yamerudi', body: body, kind: 'WINGBACK:$wingId:$when');
+    });
+    await bumpRevision();
+    return null;
+  }
+
+  Future<String?> dropReturnedWing(String wingId) async {
+    final rows = await db.query('wings', where: 'id = ?', whereArgs: [wingId]);
+    if (rows.isEmpty) return 'Rekodi haipo.';
+    if (rows.first['status'] != 'BACK') return 'Rudisha kwanza, kisha uondoe.';
+    await db.transaction((txn) async {
+      await txn.delete('wing_items', where: 'wing_id = ?', whereArgs: [wingId]);
+      await txn.delete('wings', where: 'id = ?', whereArgs: [wingId]);
+    });
+    await bumpRevision();
+    return null;
+  }
 
   Future<void> markReminded(String debtId) async {
     await db.update('debts', {'last_reminded': DateTime.now().toIso8601String()}, where: 'id = ?', whereArgs: [debtId]);
@@ -752,7 +1153,10 @@ class ShopDb {
     try {
       final outcome = await db.transaction((txn) async {
         final items = await txn.query('sale_items', where: 'sale_id = ?', whereArgs: [saleId]);
-        final prior = await txn.query('return_items');
+        final prior = await txn.rawQuery(
+          'SELECT * FROM return_items WHERE sale_item_id IN (SELECT id FROM sale_items WHERE sale_id = ?)',
+          [saleId],
+        );
         final already = <String, int>{};
         final itemIds = items.map((row) => row['id']).toSet();
         for (final row in prior) {
@@ -785,6 +1189,7 @@ class ShopDb {
             cost: cost,
             phoneId: phoneId,
             productId: item['product_id'] as String?,
+            faultSale: asInt(item['faulty']) == 1,
           ));
         }
         final returnedBefore = asDouble(sale['returned']);
@@ -819,13 +1224,33 @@ class ShopDb {
             'price': line.price,
             'cost': line.cost,
             'phone_id': line.phoneId,
+            'faulty': chosen.any((pick) => pick.itemId == line.itemId && pick.faulty) ? 1 : 0,
           });
+          final faulty = chosen.any((pick) => pick.itemId == line.itemId && pick.faulty);
           if (line.phoneId != null && line.phoneId!.isNotEmpty) {
-            await txn.update('phone_units', {'status': 'IN_STOCK'}, where: 'id = ?', whereArgs: [line.phoneId]);
+            await txn.update('phone_units', {'status': faulty ? 'FAULTY' : 'IN_STOCK'}, where: 'id = ?', whereArgs: [line.phoneId]);
           } else if (line.productId != null && line.productId!.isNotEmpty) {
-            await txn.rawUpdate('UPDATE products SET stock = MIN(100000, stock + ?), active = 1 WHERE id = ?', [line.qty, line.productId]);
+            if (faulty) {
+              await txn.rawUpdate('UPDATE products SET fault_qty = MIN(100000, fault_qty + ?), active = 1 WHERE id = ?', [line.qty, line.productId]);
+            } else {
+              await txn.rawUpdate('UPDATE products SET stock = MIN(100000, stock + ?), active = 1 WHERE id = ?', [line.qty, line.productId]);
+            }
           }
-          await _move(txn, name: line.name, delta: line.qty, reason: 'RUDISHO', staff: actor);
+          if (faulty && !line.faultSale) {
+            await _fault(
+              txn,
+              name: line.name,
+              qty: line.qty,
+              cost: line.cost,
+              source: 'RUDI',
+              productId: line.productId,
+              phoneId: line.phoneId,
+              staff: actor,
+              note: cleanReason,
+            );
+          } else {
+            await _move(txn, name: line.name, delta: line.qty, reason: 'RUDISHO', staff: actor);
+          }
         }
         await txn.update('sales', {
           'returned': returnedBefore + total,
@@ -878,9 +1303,18 @@ class ShopDb {
 }
 
 class ReturnPick {
-  const ReturnPick(this.itemId, this.qty);
+  const ReturnPick(this.itemId, this.qty, {this.faulty = false});
   final String itemId;
   final int qty;
+  final bool faulty;
+}
+
+class WingPick {
+  const WingPick({required this.name, required this.qty, this.productId, this.phoneId});
+  final String name;
+  final int qty;
+  final String? productId;
+  final String? phoneId;
 }
 
 class PaperPick {
@@ -892,6 +1326,7 @@ class PaperPick {
     required this.cost,
     this.phoneId,
     this.productId,
+    this.faultSale = false,
   });
 
   final String itemId;
@@ -901,6 +1336,7 @@ class PaperPick {
   final double cost;
   final String? phoneId;
   final String? productId;
+  final bool faultSale;
 }
 
 class ReturnOutcome {
@@ -941,19 +1377,23 @@ class CartLine {
     this.phoneId,
     this.productId,
     this.warrantyMonths = 0,
+    this.warrantyDays = 0,
     this.categoryName = '',
+    this.faulty = false,
   }) : uid = _id();
 
   final String uid;
   final String name;
-  final double price;
+  double price;
   final double cost;
   int qty;
   final String? imei;
   final String? phoneId;
   final String? productId;
   final int warrantyMonths;
+  final int warrantyDays;
   final String categoryName;
+  final bool faulty;
 
   double get lineTotal => price * qty;
 }
@@ -1023,7 +1463,8 @@ Future<void> _create(Database db) async {
     CREATE TABLE categories(
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
-      slug TEXT NOT NULL
+      slug TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'goods'
     )
   ''');
   await db.execute('''
@@ -1039,9 +1480,15 @@ Future<void> _create(Database db) async {
       barcode TEXT,
       reorder_level INTEGER NOT NULL DEFAULT 3,
       warranty_months INTEGER NOT NULL DEFAULT 0,
+      warranty_days INTEGER NOT NULL DEFAULT 0,
+      fault_qty INTEGER NOT NULL DEFAULT 0,
       active INTEGER NOT NULL DEFAULT 1,
       color TEXT NOT NULL DEFAULT '',
-      size TEXT NOT NULL DEFAULT ''
+      size TEXT NOT NULL DEFAULT '',
+      storage TEXT NOT NULL DEFAULT '',
+      ram TEXT NOT NULL DEFAULT '',
+      screen TEXT NOT NULL DEFAULT '',
+      condition TEXT NOT NULL DEFAULT ''
     )
   ''');
   await db.execute('''
@@ -1051,12 +1498,16 @@ Future<void> _create(Database db) async {
       imei TEXT NOT NULL UNIQUE,
       color TEXT,
       storage TEXT,
+      ram TEXT NOT NULL DEFAULT '',
+      screen TEXT NOT NULL DEFAULT '',
       condition TEXT,
       price REAL NOT NULL,
       cost REAL NOT NULL DEFAULT 0,
       floor_price REAL NOT NULL,
       status TEXT NOT NULL,
-      warranty_months INTEGER NOT NULL
+      warranty_months INTEGER NOT NULL,
+      warranty_days INTEGER NOT NULL DEFAULT 0,
+      category_id TEXT NOT NULL DEFAULT ''
     )
   ''');
   await db.execute('''
@@ -1102,7 +1553,9 @@ Future<void> _create(Database db) async {
       product_id TEXT,
       phone_id TEXT,
       warranty_months INTEGER NOT NULL DEFAULT 0,
-      category_name TEXT NOT NULL DEFAULT ''
+      warranty_days INTEGER NOT NULL DEFAULT 0,
+      category_name TEXT NOT NULL DEFAULT '',
+      faulty INTEGER NOT NULL DEFAULT 0
     )
   ''');
   await db.execute('''
@@ -1148,7 +1601,10 @@ Future<void> _create(Database db) async {
       balance REAL NOT NULL,
       opened_at TEXT NOT NULL,
       status TEXT NOT NULL,
-      last_reminded TEXT NOT NULL DEFAULT ''
+      last_reminded TEXT NOT NULL DEFAULT '',
+      due_at TEXT NOT NULL DEFAULT '',
+      term_days INTEGER NOT NULL DEFAULT 0,
+      term_unit TEXT NOT NULL DEFAULT ''
     )
   ''');
   await db.execute('''
@@ -1184,6 +1640,44 @@ Future<void> _create(Database db) async {
       qty INTEGER NOT NULL,
       price REAL NOT NULL,
       cost REAL NOT NULL DEFAULT 0,
+      phone_id TEXT,
+      faulty INTEGER NOT NULL DEFAULT 0
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE faults(
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      qty INTEGER NOT NULL,
+      cost REAL NOT NULL DEFAULT 0,
+      source TEXT NOT NULL,
+      product_id TEXT,
+      phone_id TEXT,
+      note TEXT NOT NULL DEFAULT '',
+      staff_name TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE wings(
+      id TEXT PRIMARY KEY,
+      person_name TEXT NOT NULL,
+      person_phone TEXT NOT NULL DEFAULT '',
+      note TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL,
+      taken_at TEXT NOT NULL,
+      returned_at TEXT NOT NULL DEFAULT '',
+      staff_name TEXT NOT NULL DEFAULT ''
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE wing_items(
+      id TEXT PRIMARY KEY,
+      wing_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      qty INTEGER NOT NULL,
+      returned_qty INTEGER NOT NULL DEFAULT 0,
+      product_id TEXT,
       phone_id TEXT
     )
   ''');
@@ -1299,6 +1793,83 @@ Future<void> _upgrade(Database db) async {
   }
 }
 
+Future<void> _fault(
+  DatabaseExecutor db, {
+  required String name,
+  required int qty,
+  required double cost,
+  required String source,
+  String? productId,
+  String? phoneId,
+  required String staff,
+  required String note,
+}) async {
+  if (qty == 0) return;
+  await db.insert('faults', {
+    'id': _id(),
+    'name': _plain(name, 80),
+    'qty': qty,
+    'cost': cost,
+    'source': source,
+    'product_id': productId,
+    'phone_id': phoneId,
+    'note': _plain(note, 120),
+    'staff_name': _plain(staff, 40),
+    'created_at': DateTime.now().toIso8601String(),
+  });
+}
+
+Future<void> _upgradeBooks(Database db) async {
+  await _addColumn(db, 'products', 'warranty_days', 'INTEGER NOT NULL DEFAULT 0');
+  await _addColumn(db, 'products', 'fault_qty', 'INTEGER NOT NULL DEFAULT 0');
+  await _addColumn(db, 'phone_units', 'warranty_days', 'INTEGER NOT NULL DEFAULT 0');
+  await _addColumn(db, 'sale_items', 'warranty_days', 'INTEGER NOT NULL DEFAULT 0');
+  await _addColumn(db, 'debts', 'due_at', "TEXT NOT NULL DEFAULT ''");
+  await _addColumn(db, 'debts', 'term_days', 'INTEGER NOT NULL DEFAULT 0');
+  await _addColumn(db, 'debts', 'term_unit', "TEXT NOT NULL DEFAULT ''");
+  await _addColumn(db, 'return_items', 'faulty', 'INTEGER NOT NULL DEFAULT 0');
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS faults(
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      qty INTEGER NOT NULL,
+      cost REAL NOT NULL DEFAULT 0,
+      source TEXT NOT NULL,
+      product_id TEXT,
+      phone_id TEXT,
+      note TEXT NOT NULL DEFAULT '',
+      staff_name TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS wings(
+      id TEXT PRIMARY KEY,
+      person_name TEXT NOT NULL,
+      person_phone TEXT NOT NULL DEFAULT '',
+      note TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL,
+      taken_at TEXT NOT NULL,
+      returned_at TEXT NOT NULL DEFAULT '',
+      staff_name TEXT NOT NULL DEFAULT ''
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS wing_items(
+      id TEXT PRIMARY KEY,
+      wing_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      qty INTEGER NOT NULL,
+      returned_qty INTEGER NOT NULL DEFAULT 0,
+      product_id TEXT,
+      phone_id TEXT
+    )
+  ''');
+  await db.rawUpdate('UPDATE products SET warranty_days = warranty_months * 30 WHERE warranty_days = 0 AND warranty_months > 0');
+  await db.rawUpdate('UPDATE phone_units SET warranty_days = warranty_months * 30 WHERE warranty_days = 0 AND warranty_months > 0');
+  await db.rawUpdate('UPDATE sale_items SET warranty_days = warranty_months * 30 WHERE warranty_days = 0 AND warranty_months > 0');
+}
+
 Future<void> _move(DatabaseExecutor db, {required String name, required int delta, required String reason, required String staff}) async {
   if (delta == 0) return;
   await db.insert('stock_moves', {
@@ -1364,6 +1935,22 @@ Future<void> _upgradeFaces(Database db) async {
   await _addColumn(db, 'staff', 'photo', "TEXT NOT NULL DEFAULT ''");
 }
 
+Future<void> _upgradeKinds(Database db) async {
+  await _addColumn(db, 'categories', 'kind', "TEXT NOT NULL DEFAULT 'goods'");
+  await db.update('categories', {'kind': 'phone'}, where: 'id = ?', whereArgs: ['phones']);
+  await _addColumn(db, 'phone_units', 'category_id', "TEXT NOT NULL DEFAULT ''");
+  final now = DateTime.now().toUtc().toIso8601String();
+  for (final key in ['shop_name', 'shop_location', 'shop_phone', 'receipt_footer', 'lipa_namba', 'shop_logo']) {
+    final rows = await db.query('meta', where: 'key = ?', whereArgs: [key]);
+    if (rows.isEmpty) continue;
+    await db.insert('meta', {'key': '${key}__at', 'value': now}, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+}
+
+bool _keepMeta(String key) {
+  return key != 'device_id' && key != 'cloud_url' && key != 'sync_token' && key != 'cloud_url__at' && key != 'sync_token__at';
+}
+
 Future<void> _upgradeReturns(Database db) async {
   await _addColumn(db, 'sales', 'returned', 'REAL NOT NULL DEFAULT 0');
   await _addColumn(db, 'debts', 'last_reminded', "TEXT NOT NULL DEFAULT ''");
@@ -1421,6 +2008,28 @@ String? _moneyOk(double price, double cost) {
   return null;
 }
 
+Future<void> _speedIndexes(Database db) async {
+  const lines = [
+    'CREATE INDEX IF NOT EXISTS idx_sales_created ON sales(created_at)',
+    'CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items(sale_id)',
+    'CREATE INDEX IF NOT EXISTS idx_sale_items_imei ON sale_items(imei)',
+    'CREATE INDEX IF NOT EXISTS idx_debts_sale ON debts(sale_id)',
+    'CREATE INDEX IF NOT EXISTS idx_debts_status ON debts(status)',
+    'CREATE INDEX IF NOT EXISTS idx_payments_debt ON debt_payments(debt_id)',
+    'CREATE INDEX IF NOT EXISTS idx_returns_sale ON returns(sale_id)',
+    'CREATE INDEX IF NOT EXISTS idx_return_items_item ON return_items(sale_item_id)',
+    'CREATE INDEX IF NOT EXISTS idx_phones_imei ON phone_units(imei)',
+    'CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode)',
+    'CREATE INDEX IF NOT EXISTS idx_moves_created ON stock_moves(created_at)',
+    'CREATE INDEX IF NOT EXISTS idx_wings_status ON wings(status)',
+  ];
+  for (final line in lines) {
+    try {
+      await db.execute(line);
+    } catch (_) {}
+  }
+}
+
 Future<void> _addColumn(Database db, String table, String column, String definition) async {
   final info = await db.rawQuery('PRAGMA table_info($table)');
   if (info.any((row) => row['name'] == column)) return;
@@ -1443,52 +2052,8 @@ Future<void> _seed(Database db) async {
     ['speakers', 'Spika', 'speakers'],
   ];
   for (final row in categories) {
-    await db.insert('categories', {'id': row[0], 'name': row[1], 'slug': row[2]});
+    await db.insert('categories', {'id': row[0], 'name': row[1], 'slug': row[2], 'kind': row[0] == 'phones' ? 'phone' : 'goods'});
   }
 
-  Future<void> product(String id, String name, String category, String brand, double price, int stock, String barcode) {
-    return db.insert('products', {
-      'id': id,
-      'name': name,
-      'type': 'ACCESSORY',
-      'category_id': category,
-      'brand': brand,
-      'price': price,
-      'cost': (price * 0.7).roundToDouble(),
-      'stock': stock,
-      'barcode': barcode,
-      'reorder_level': 3,
-      'warranty_months': 1,
-      'active': 1,
-    });
-  }
-
-  await product('chg', 'Anker 20W Nano Charger', 'chargers', 'Anker', 45000, 25, '694801230011');
-  await product('air', 'AirPods Pro 2 USB-C', 'audio', 'Apple', 580000, 8, '194253397168');
-  await product('bank', 'Anker Magnetic Power Bank', 'power', 'Anker', 135000, 12, '848061031122');
-  await product('case', 'MagSafe Silicone Case', 'covers', 'Apple', 25000, 17, '88019283001');
-  await product('glass', 'Privacy Tempered Glass', 'glass', 'Baseus', 15000, 25, '79201928101');
-  await product('cable', 'Braided USB-C Cable 1.2m', 'cables', 'Baseus', 12000, 40, '692317251001');
-
-  Future<void> phone(String name, String imei, String color, String storage, String condition, double price, double floor, int warranty) {
-    return db.insert('phone_units', {
-      'id': _id(),
-      'product_name': name,
-      'imei': imei,
-      'color': color,
-      'storage': storage,
-      'condition': condition,
-      'price': price,
-      'cost': floor,
-      'floor_price': floor,
-      'status': 'IN_STOCK',
-      'warranty_months': warranty,
-    });
-  }
-
-  await phone('iPhone 15 Pro Max', '358921104829101', 'Natural Titanium', '256GB', 'NEW', 2850000, 2750000, 12);
-  await phone('iPhone 15 Pro Max', '358921104829103', 'Black Titanium', '512GB', 'LIKE NEW', 3100000, 2980000, 6);
-  await phone('Galaxy S24 Ultra', '352198110428811', 'Titanium Gray', '256GB', 'NEW', 2650000, 2520000, 12);
-  await phone('Camon 30 Pro', '867530912345678', 'Basaltic Dark', '256GB', 'NEW', 780000, 720000, 12);
   await db.insert('meta', {'key': 'shop_name', 'value': 'PhoneVault'});
 }

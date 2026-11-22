@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
-const sky = Color(0xFF80DDFF);
-const skyDeep = Color(0xFF0284C7);
-const skyPage = Color(0xFFE6F7FF);
+const sky = Color(0xFF80C050);
+const skyDeep = Color(0xFF509541);
+const skyPage = Color(0xFFEAF6E8);
 const ink = Color(0xFF0F172A);
 const muted = Color(0xFF64748B);
 const warn = Color(0xFFB45309);
 
-const titleStyle = TextStyle(fontSize: 22, height: 1.15, fontWeight: FontWeight.w700, color: ink, letterSpacing: -0.3);
+const titleStyle = TextStyle(fontSize: 22, height: 1.15, fontWeight: FontWeight.w700, color: ink);
 const sectionStyle = TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: ink);
 const bodyStyle = TextStyle(fontSize: 15, height: 1.35, color: ink);
 const captionStyle = TextStyle(fontSize: 13, height: 1.35, color: muted);
@@ -33,8 +33,8 @@ ThemeData phoneTheme() {
       floatingLabelBehavior: FloatingLabelBehavior.always,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       labelStyle: const TextStyle(color: muted, fontSize: 14),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFF7DD3F0))),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFF7DD3F0), width: 1.2)),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFFB7D7A8))),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFFB7D7A8), width: 1.2)),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(color: skyDeep, width: 1.6),
@@ -113,5 +113,5 @@ class _FadeSlideTransitionsBuilder extends PageTransitionsBuilder {
 BoxDecoration vaultCard() => BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(22),
-      boxShadow: const [BoxShadow(color: Color(0x140284C7), blurRadius: 18, offset: Offset(0, 8))],
+      boxShadow: const [BoxShadow(color: Color(0x14509541), blurRadius: 18, offset: Offset(0, 8))],
     );

@@ -1,13 +1,32 @@
 import 'package:flutter/material.dart';
 
+import '../lang.dart';
 import '../money.dart';
 import '../shop_store.dart';
 import '../theme.dart';
 import '../widgets/ui.dart';
 
-class DebtsPage extends StatelessWidget {
-  const DebtsPage({super.key, required this.store});
+String debtDueLine(Map<String, Object?> debt) {
+  final due = DateTime.tryParse('${debt['due_at']}')?.toLocal();
+  final term = debtTermWords(asInt(debt['term_days']), '${debt['term_unit']}');
+  final when = due == null ? '' : formatDay(due);
+  final late = due != null && due.isBefore(DateTime.now());
+  final line = late ? tf('Muda umeisha · {0}', [when]) : tf('Analipa {0}', [when]);
+  return term.isEmpty ? line : '$line · $term';
+}
+
+class DebtsPage extends StatefulWidget {
+  const DebtsPage({super.key, required this.store, this.onBack});
   final ShopStore store;
+  final VoidCallback? onBack;
+
+  @override
+  State<DebtsPage> createState() => _DebtsPageState();
+}
+
+class _DebtsPageState extends State<DebtsPage> {
+  String _which = 'open';
+  ShopStore get store => widget.store;
 
   @override
   Widget build(BuildContext context) {
@@ -15,16 +34,38 @@ class DebtsPage extends StatelessWidget {
       listenable: store,
       builder: (context, _) {
         if (!store.seeDebts) {
-          return const Scaffold(backgroundColor: skyPage, body: LockedNote(title: 'Madeni'));
+          return Scaffold(backgroundColor: skyPage, body: LockedNote(title: t('Madeni')));
         }
         final open = store.debts.where((row) => row['status'] == 'OPEN').toList();
-        final closed = store.debts.where((row) => row['status'] == 'PAID').toList();
+        final closed = store.debts.where((row) => row['status'] == 'PAID' && !store.hiddenDebts.contains('${row['id']}')).toList();
+        final shown = _which == 'paid' ? closed : _which == 'all' ? [...open, ...closed] : open;
         return Scaffold(
           backgroundColor: skyPage,
           body: ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             children: [
-              const Text('Madeni', style: titleStyle),
+              Row(
+                children: [
+                  if (widget.onBack != null)
+                    IconButton(tooltip: t('Rudi'), onPressed: widget.onBack, icon: const Icon(Icons.arrow_back, color: ink)),
+                  Expanded(child: Text(tx('Madeni', 'Debts'), style: titleStyle)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: vaultCard(),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _filter('open', t('Hayajalipwa'), open.length),
+                    _filter('paid', t('Yaliyolipwa'), closed.length),
+                    _filter('all', t('Zote'), open.length + closed.length),
+                  ],
+                ),
+              ),
               const SizedBox(height: 12),
               Container(
                 width: double.infinity,
@@ -33,29 +74,56 @@ class DebtsPage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Jumla inayosubiri', style: TextStyle(color: muted)),
+                    Text(t('Jumla inayosubiri'), style: TextStyle(color: muted)),
                     FittedBox(
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
                       child: Text(tsh(store.debtTotal), style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w600, color: ink)),
                     ),
-                    Text('${open.length} wateja', style: const TextStyle(color: muted)),
+                    Text(tf('{0} wateja', ['${open.length}']), style: const TextStyle(color: muted)),
                   ],
                 ),
               ),
               const SizedBox(height: 16),
-              if (open.isEmpty) const EmptyHint(text: 'Hakuna deni lililo wazi. Ukiuza chini ya bei, deni linaandikwa hapa.'),
-              for (final debt in open) _tile(context, debt, open: true),
-              if (closed.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                const Text('Yaliyolipwa', style: TextStyle(fontWeight: FontWeight.w600, color: ink)),
-                const SizedBox(height: 8),
-                for (final debt in closed) _tile(context, debt, open: false),
-              ],
+              if (_which == 'paid' && (closed.isNotEmpty || store.hiddenDebts.isNotEmpty))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    children: [
+                      if (closed.isNotEmpty)
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => _hideAll(context),
+                            child: Text(t('Ondoa yaliyolipwa')),
+                          ),
+                        ),
+                      if (store.hiddenDebts.isNotEmpty) ...[
+                        if (closed.isNotEmpty) const SizedBox(width: 8),
+                        TextButton(onPressed: () => store.showDebts(), child: Text(t('Onyesha'))),
+                      ],
+                    ],
+                  ),
+                ),
+              if (shown.isEmpty) EmptyHint(text: _which == 'paid' ? t('Hakuna deni lililolipwa.') : t('Hakuna deni lililo wazi.')),
+              for (final debt in shown) _tile(context, debt, open: debt['status'] == 'OPEN'),
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget _filter(String key, String label, int count) {
+    final on = _which == key;
+    return ChoiceChip(
+      label: Text('$label  $count'),
+      selected: on,
+      showCheckmark: false,
+      selectedColor: skyDeep,
+      backgroundColor: Colors.white,
+      labelStyle: TextStyle(color: on ? Colors.white : ink, fontWeight: FontWeight.w700),
+      side: BorderSide(color: on ? skyDeep : const Color(0xFFD7E8D4)),
+      onSelected: (_) => setState(() => _which = key),
     );
   }
 
@@ -70,13 +138,7 @@ class DebtsPage extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         child: InkWell(
           borderRadius: BorderRadius.circular(18),
-          onTap: () => showModalBottomSheet<void>(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.white,
-            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-            builder: (_) => _DebtSheet(store: store, debt: debt),
-          ),
+          onTap: open ? () => _openPay(context, debt) : null,
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Column(
@@ -85,47 +147,53 @@ class DebtsPage extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(child: Text('${debt['customer_name']}', style: const TextStyle(fontWeight: FontWeight.w600, color: ink))),
-                    Text(open ? tsh(balance) : 'Imelipwa', style: TextStyle(fontWeight: FontWeight.w600, color: open ? const Color(0xFFB45309) : skyDeep)),
+                    Text(open ? tsh(balance) : t('Imelipwa'), style: TextStyle(fontWeight: FontWeight.w600, color: open ? const Color(0xFFB45309) : skyDeep)),
                   ],
                 ),
                 Text('${showPhone('${debt['customer_phone']}')} · ${formatWhen('${debt['opened_at']}')}', style: const TextStyle(color: muted, fontSize: 12)),
-                if (open && _overdue(debt))
-                  const Padding(
-                    padding: EdgeInsets.only(top: 6),
-                    child: Text('Siku 30 bila malipo', style: TextStyle(color: Color(0xFFB45309), fontWeight: FontWeight.w600, fontSize: 12)),
+                if (open && '${debt['due_at']}'.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(debtDueLine(debt), style: const TextStyle(color: Color(0xFFB45309), fontWeight: FontWeight.w600, fontSize: 12)),
                   ),
-                const SizedBox(height: 8),
+                if (open && '${debt['due_at']}'.isEmpty && _overdue(debt))
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(t('Siku 30 bila malipo'), style: const TextStyle(color: Color(0xFFB45309), fontWeight: FontWeight.w600, fontSize: 12)),
+                  ),
+                const SizedBox(height: 10),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: LinearProgressIndicator(value: paid, minHeight: 8, backgroundColor: skyPage, color: skyDeep),
+                  child: LinearProgressIndicator(value: paid, minHeight: 6, backgroundColor: skyPage, color: skyDeep),
                 ),
-                const SizedBox(height: 4),
-                Text('Alikopa ${tsh(principal)}', style: const TextStyle(color: muted, fontSize: 12)),
                 if (open) ...[
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: () => _openPay(context, debt),
+                          child: Text(t('Pokea malipo')),
+                        ),
+                      ),
+                      if (_overdue(debt) || store.dueReminders().any((row) => row['id'] == debt['id'])) ...[
+                        const SizedBox(width: 8),
+                        OutlinedButton(
+                          onPressed: () => _remind(context, store, debt),
+                          child: Text(t('Ukumbusho')),
+                        ),
+                      ],
+                    ],
+                  ),
+                ] else ...[
+                  const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
-                    child: FilledButton(
-                      onPressed: () => showModalBottomSheet<void>(
-                        context: context,
-                        isScrollControlled: true,
-                        backgroundColor: Colors.white,
-                        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-                        builder: (_) => _DebtSheet(store: store, debt: debt),
-                      ),
-                      child: const Text('Pokea malipo'),
+                    child: OutlinedButton(
+                      onPressed: () => _hideOne(context, debt),
+                      child: Text(t('Ondoa deni')),
                     ),
                   ),
-                  if (_overdue(debt)) ...[
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        onPressed: () => _remind(context, store, debt),
-                        child: const Text('Tuma ukumbusho'),
-                      ),
-                    ),
-                  ],
                 ],
               ],
             ),
@@ -135,16 +203,40 @@ class DebtsPage extends StatelessWidget {
     );
   }
 
+  void _openPay(BuildContext context, Map<String, Object?> debt) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (_) => _DebtSheet(store: store, debt: debt),
+    );
+  }
+
   bool _overdue(Map<String, Object?> debt) {
     final opened = DateTime.tryParse('${debt['opened_at']}')?.toLocal();
     if (opened == null) return false;
     return DateTime.now().difference(opened).inDays >= 30 && isTzPhone('${debt['customer_phone']}');
   }
 
+  Future<void> _hideOne(BuildContext context, Map<String, Object?> debt) async {
+    final ok = await confirm(context, t('Ondoa deni'), t('Deni hili litaondoka kwenye ukurasa. Mauzo na malipo yanabaki.'));
+    if (!ok || !context.mounted) return;
+    await store.hideDebt('${debt['id']}');
+    if (context.mounted) toast(context, 'Deni limeondolewa.');
+  }
+
+  Future<void> _hideAll(BuildContext context) async {
+    final ok = await confirm(context, t('Ondoa yaliyolipwa'), t('Madeni yaliyolipwa yataondoka kwenye ukurasa. Mauzo na malipo yanabaki.'));
+    if (!ok || !context.mounted) return;
+    await store.hidePaidDebts();
+    if (context.mounted) toast(context, 'Madeni yameondolewa.');
+  }
+
   Future<void> _remind(BuildContext context, ShopStore store, Map<String, Object?> debt) async {
     final error = await store.sendDebtReminder(debt);
     if (!context.mounted) return;
-    toast(context, error ?? 'WhatsApp imefunguka kwa namba hii. Bonyeza Tuma.');
+    toast(context, error ?? t('WhatsApp imefunguka kwa namba hii. Bonyeza Tuma.'));
   }
 }
 
@@ -163,6 +255,8 @@ class _DebtSheetState extends State<_DebtSheet> {
   String _cover = 'PART';
   List<Map<String, Object?>> _payments = [];
   bool _busy = false;
+  String? _note;
+  bool _noteBad = false;
 
   @override
   void initState() {
@@ -188,59 +282,113 @@ class _DebtSheetState extends State<_DebtSheet> {
           orElse: () => widget.debt,
         )!;
     final open = debt['status'] == 'OPEN';
+    final balance = asDouble(debt['balance']);
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
     return Padding(
-      padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 16 + MediaQuery.viewInsetsOf(context).bottom),
-      child: SingleChildScrollView(
+      padding: EdgeInsets.only(bottom: bottom),
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.78,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('${debt['customer_name']}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600)),
-            Text('${debt['customer_phone']}', style: const TextStyle(color: muted)),
-            const SizedBox(height: 8),
-            Text('Alikopa ${formatWhen('${debt['opened_at']}')}', style: const TextStyle(color: ink)),
-            Text('Kilichokopwa ${tsh(asDouble(debt['principal']))}', style: const TextStyle(color: ink)),
-            Text('Baki ${tsh(asDouble(debt['balance']))}', style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFFB45309))),
-            const SizedBox(height: 12),
-            const Text('Malipo yaliyopita', style: TextStyle(fontWeight: FontWeight.w600)),
-            if (_payments.isEmpty) const Text('Bado hajalipa chochote.', style: TextStyle(color: muted)),
-            for (final pay in _payments)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(tsh(asDouble(pay['amount']))),
-                subtitle: Text('${formatWhen('${pay['created_at']}')} · ${methodLabel('${pay['method']}')} · ${pay['cashier_name']}'),
-              ),
-            if (open) ...[
-              const Divider(),
-              const Text('Pokea malipo', style: TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
+            Row(
+              children: [
+                IconButton(
+                  tooltip: t('Rudi'),
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.arrow_back, color: ink),
+                ),
+                Expanded(
+                  child: Text('${debt['customer_name']}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                ),
+              ],
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                 children: [
-                  ChoiceChip(label: const Text('Deni nusu'), selected: _cover == 'PART', selectedColor: sky, onSelected: (_) => setState(() => _cover = 'PART')),
-                  ChoiceChip(label: const Text('Deni zima'), selected: _cover == 'ALL', selectedColor: sky, onSelected: (_) => setState(() => _cover = 'ALL')),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: vaultCard(),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(t('Baki'), style: captionStyle),
+                        const SizedBox(height: 4),
+                        Text(tsh(balance), style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: Color(0xFFB45309))),
+                        const SizedBox(height: 4),
+                        Text(showPhone('${debt['customer_phone']}'), style: captionStyle),
+                        Text(tf('Kilichokopwa {0}', [tsh(asDouble(debt['principal']))]), style: captionStyle),
+                      ],
+                    ),
+                  ),
+                  if (_payments.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Text(t('Malipo yaliyopita'), style: const TextStyle(fontWeight: FontWeight.w700)),
+                    for (final pay in _payments)
+                      ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(tsh(asDouble(pay['amount'])), style: const TextStyle(fontWeight: FontWeight.w700)),
+                        subtitle: Text('${methodLabel('${pay['method']}')} · ${formatWhen('${pay['created_at']}')}'),
+                      ),
+                  ],
+                  if (open) ...[
+                    const SizedBox(height: 16),
+                    Text(t('Pokea malipo'), style: const TextStyle(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 8),
+                    SegmentedButton<String>(
+                      segments: [
+                        ButtonSegment(value: 'PART', label: Text(t('Deni nusu'))),
+                        ButtonSegment(value: 'ALL', label: Text(t('Deni zima'))),
+                      ],
+                      selected: {_cover},
+                      onSelectionChanged: (value) => setState(() => _cover = value.first),
+                    ),
+                    const SizedBox(height: 8),
+                    SegmentedButton<String>(
+                      segments: [
+                        ButtonSegment(value: 'CASH', label: Text(t('Cash'))),
+                        ButtonSegment(value: 'LIPA', label: Text(t('Lipa Namba'))),
+                      ],
+                      selected: {_method},
+                      onSelectionChanged: (value) => setState(() => _method = value.first),
+                    ),
+                    if (_cover == 'PART') ...[
+                      const SizedBox(height: 12),
+                      SoftField(controller: _amount, label: t('Analipa sasa'), keyboard: TextInputType.number, digitsOnly: true, maxLength: 9),
+                    ],
+                    if (_cover == 'ALL') ...[
+                      const SizedBox(height: 12),
+                      Text(tf('Analipa baki yote {0}', [tsh(balance)]), style: const TextStyle(color: skyDeep, fontWeight: FontWeight.w700)),
+                    ],
+                  ],
+                  if (_note != null) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: _noteBad ? const Color(0xFFFEE2E2) : skyPage,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(speak(_note!), style: TextStyle(color: _noteBad ? const Color(0xFFB91C1C) : skyDeep, fontWeight: FontWeight.w700)),
+                    ),
+                  ],
                 ],
               ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  ChoiceChip(label: const Text('Cash'), selected: _method == 'CASH', selectedColor: sky, onSelected: (_) => setState(() => _method = 'CASH')),
-                  ChoiceChip(label: const Text('Lipa Namba'), selected: _method == 'LIPA', selectedColor: sky, onSelected: (_) => setState(() => _method = 'LIPA')),
-                ],
+            ),
+            if (open)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: _busy ? null : _pay,
+                    child: Text(_busy ? t('Inahifadhi...') : t('Hifadhi')),
+                  ),
+                ),
               ),
-              if (_cover == 'PART') ...[
-                const SizedBox(height: 8),
-                SoftField(controller: _amount, label: 'Analipa sasa', keyboard: TextInputType.number, digitsOnly: true, maxLength: 9),
-              ],
-              if (_cover == 'ALL') ...[
-                const SizedBox(height: 8),
-                Text('Analipa baki yote ${tsh(asDouble(debt['balance']))}', style: const TextStyle(color: skyDeep, fontWeight: FontWeight.w600)),
-              ],
-              const SizedBox(height: 12),
-              FilledButton(onPressed: _busy ? null : _pay, child: const Text('Sasisha deni')),
-            ],
           ],
         ),
       ),
@@ -248,26 +396,41 @@ class _DebtSheetState extends State<_DebtSheet> {
   }
 
   Future<void> _pay() async {
-    setState(() => _busy = true);
     final current = widget.store.debts.cast<Map<String, Object?>?>().firstWhere(
           (row) => row?['id'] == widget.debt['id'],
           orElse: () => widget.debt,
         );
     final balance = asDouble(current?['balance']);
+    final amount = _cover == 'ALL' ? balance : (int.tryParse(_amount.text.trim()) ?? 0).toDouble();
+    setState(() {
+      _busy = true;
+      _note = null;
+    });
     final error = await widget.store.payDebt(
       debtId: widget.debt['id'] as String,
-      amount: _cover == 'ALL' ? balance : (int.tryParse(_amount.text.trim()) ?? 0).toDouble(),
+      amount: amount,
       method: _method,
       note: '',
     );
     if (!mounted) return;
-    setState(() => _busy = false);
     if (error != null) {
+      setState(() {
+        _busy = false;
+        _note = error;
+        _noteBad = true;
+      });
       toast(context, error);
       return;
     }
     _amount.clear();
     await _load();
-    if (mounted) toast(context, 'Malipo yamehifadhiwa');
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _note = 'Malipo yamehifadhiwa';
+      _noteBad = false;
+    });
+    toast(context, 'Malipo yamehifadhiwa');
+    if (amount >= balance - 0.5) Navigator.pop(context);
   }
 }

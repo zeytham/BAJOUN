@@ -25,6 +25,8 @@ import settingsRoutes from './routes/settings.routes.js';
 import smsRoutes from './routes/sms.routes.js';
 
 import customersRoutes from './routes/customers.routes.js';
+import adminRoutes from './routes/admin.routes.js';
+import { seedDefaultCustomers } from './controllers/customers.controller.js';
 
 dotenv.config();
 
@@ -68,6 +70,7 @@ app.use('/api/forecasting', forecastingRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/sms', smsRoutes);
 app.use('/api/customers', customersRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api/backups', backupRoutes);
 app.use('/api/sync', syncRoutes);
 app.use('/api/exports', exportRoutes);
@@ -81,6 +84,7 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
   startShopJobs();
+  seedDefaultCustomers().catch((error) => console.error('Customer seed failed:', error.message));
   upgradePlainPins().catch((error) => console.error('PIN hash upgrade failed:', error.message));
   console.log(`PhoneVault POS API running on port ${PORT} (SQLite shop database)`);
 });

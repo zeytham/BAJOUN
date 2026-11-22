@@ -3,9 +3,22 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'lang.dart';
 import 'money.dart';
 
 const _channel = MethodChannel('tz.phonevault/screen');
+const zeyhaanWhatsapp = '0624945919';
+
+Future<String?> openZeyhaanWhatsapp() async {
+  final digits = whatsappDigits(zeyhaanWhatsapp);
+  if (digits == null) return 'Namba haiko sahihi.';
+  final opened = await _channel.invokeMethod<bool>('chat', {
+    'phone': digits,
+    'text': t('Habari Zeyhaan, nahitaji msaada kuhusu PhoneVault.'),
+  });
+  if (opened != true) return 'WhatsApp haikufunguka kwenye simu hii.';
+  return null;
+}
 
 Future<String?> sendWhatsappPdf({
   required String phone,

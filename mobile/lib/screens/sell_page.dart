@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../lang.dart';
 import '../money.dart';
 import '../receipt_pdf.dart';
 import '../shop_db.dart';
@@ -10,14 +11,16 @@ import '../widgets/ui.dart';
 import 'scan_page.dart';
 
 class SellPage extends StatefulWidget {
-  const SellPage({super.key, required this.store});
+  const SellPage({super.key, required this.store, this.onFilter, this.onBack});
   final ShopStore store;
+  final ValueChanged<bool>? onFilter;
+  final VoidCallback? onBack;
 
   @override
-  State<SellPage> createState() => _SellPageState();
+  State<SellPage> createState() => SellPageState();
 }
 
-class _SellPageState extends State<SellPage> {
+class SellPageState extends State<SellPage> {
   final _search = TextEditingController();
   String? _category;
   bool _binHot = false;
@@ -45,8 +48,10 @@ class _SellPageState extends State<SellPage> {
                 padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
                 child: Row(
                   children: [
-                    const Expanded(child: Text('Uza', style: titleStyle)),
-                    IconButton(tooltip: 'Msimbo', onPressed: _scan, icon: const Icon(Icons.qr_code_scanner, color: skyDeep)),
+                    if (widget.onBack != null)
+                      IconButton(tooltip: t('Rudi'), onPressed: widget.onBack, icon: const Icon(Icons.arrow_back, color: ink)),
+                    Expanded(child: Text(tx('Uza', 'Sell'), style: titleStyle)),
+                    IconButton(tooltip: t('Msimbo'), onPressed: _scan, icon: const Icon(Icons.qr_code_scanner, color: skyDeep)),
                   ],
                 ),
               ),
@@ -57,30 +62,25 @@ class _SellPageState extends State<SellPage> {
                   maxLength: 40,
                   inputFormatters: [LengthLimitingTextInputFormatter(40)],
                   onChanged: (value) => setState(() => _query = value.trim().toLowerCase()),
-                  decoration: const InputDecoration(
-                    hintText: 'Tafuta jina, IMEI au barcode',
+                  decoration: InputDecoration(
+                    hintText: t('Tafuta jina, IMEI au barcode'),
                     prefixIcon: Icon(Icons.search),
                     counterText: '',
                   ),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _chip('Zote', null),
-                      for (final category in store.categories) _chip('${category['name']}', '${category['id']}'),
-                    ],
-                  ),
+              if (_selected(store) != null)
+                _focusedBar(store)
+              else
+                ChoiceRow(
+                  children: [
+                    _chip(t('Zote'), null),
+                    for (final category in store.categories) _chip(t('${category['name']}'), '${category['id']}'),
+                  ],
                 ),
-              ),
               Expanded(
-                child: phones.isEmpty && goods.isEmpty
-                    ? const EmptyHint(text: 'Hakuna bidhaa kwenye kundi hili. Ongeza kwenye Stoo.')
+                child: phones.isEmpty && goods.isEmpty && _piles(store).isEmpty
+                    ? EmptyHint(text: t('Hakuna bidhaa kwenye kundi hili. Ongeza kwenye Stoo.'))
                     : GridView.count(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                         crossAxisCount: 2,
@@ -88,6 +88,7 @@ class _SellPageState extends State<SellPage> {
                         crossAxisSpacing: 12,
                         childAspectRatio: 0.72,
                         children: [
+                          for (final pile in _piles(store)) _pileCard(pile),
                           for (final phone in phones) _phoneCard(phone),
                           for (final product in goods) _productCard(product),
                         ],
@@ -107,46 +108,115 @@ class _SellPageState extends State<SellPage> {
     return known ? _category : null;
   }
 
+  void clearFilter() => _choose(null);
+
+  void _choose(String? id) {
+    setState(() => _category = id);
+    widget.onFilter?.call(id != null);
+  }
+
+  Widget _focusedBar(ShopStore store) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      child: Container(
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+        child: Row(
+          children: [
+            IconButton(tooltip: t('Rudi'), onPressed: clearFilter, icon: const Icon(Icons.arrow_back, color: skyDeep)),
+            Expanded(
+              child: Text(_categoryName(store), maxLines: 1, overflow: TextOverflow.ellipsis, style: sectionStyle),
+            ),
+            TextButton(onPressed: clearFilter, child: Text(t('Ondoa'))),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _categoryName(ShopStore store) {
+    for (final row in store.categories) {
+      if ('${row['id']}' == _category) return t('${row['name']}');
+    }
+    return t('Kundi');
+  }
+
   Widget _chip(String label, String? id) {
     final selected = _selected(widget.store) == id;
     return ChoiceChip(
       label: Text(label),
       selected: selected,
-      selectedColor: sky,
-      visualDensity: VisualDensity.compact,
-      onSelected: (_) => setState(() => _category = id),
+      showCheckmark: false,
+      selectedColor: skyDeep,
+      backgroundColor: Colors.white,
+      labelStyle: TextStyle(color: selected ? Colors.white : ink, fontWeight: FontWeight.w600, fontSize: 14),
+      side: BorderSide(color: selected ? skyDeep : const Color(0xFFD7E8D4)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      onSelected: (_) => _choose(id),
     );
+  }
+
+  bool _phoneGroup(ShopStore store, String? id) {
+    if (id == null) return false;
+    if (id == 'phones') return true;
+    for (final row in store.categories) {
+      if (row['id'] == id) return row['kind'] == 'phone';
+    }
+    return false;
   }
 
   List<Map<String, Object?>> _phones(ShopStore store) {
     final selected = _selected(store);
-    if (selected != null && selected != 'phones') return [];
+    if (selected != null && !_phoneGroup(store, selected)) return [];
     return store.phones.where((phone) {
       if (phone['status'] != 'IN_STOCK') return false;
-      final blob = '${phone['product_name']} ${phone['imei']} ${phone['storage']} ${phone['color']}'.toLowerCase();
+      if (selected != null && selected != 'phones' && phone['category_id'] != selected) return false;
+      final blob = '${phone['product_name']} ${phone['imei']} ${phone['storage']} ${phone['ram']} ${phone['screen']} ${phone['color']}'.toLowerCase();
       return _query.isEmpty || blob.contains(_query);
     }).toList();
   }
 
   List<Map<String, Object?>> _goods(ShopStore store) {
     final selected = _selected(store);
-    if (selected == 'phones') return [];
+    if (selected != null && _phoneGroup(store, selected)) return [];
     return store.products.where((product) {
-      if (asInt(product['active']) == 0 || asInt(product['stock']) <= 0) return false;
+      if (asInt(product['active']) == 0 || asInt(product['stock']) <= 0 || '${product['type']}' == 'PHONE') return false;
       if (selected != null && product['category_id'] != selected) return false;
       final blob = '${product['name']} ${product['brand']} ${product['barcode']}'.toLowerCase();
       return _query.isEmpty || blob.contains(_query);
     }).toList();
   }
 
+  List<Map<String, Object?>> _piles(ShopStore store) {
+    final selected = _selected(store);
+    if (selected != null && !_phoneGroup(store, selected)) return [];
+    return store.products.where((product) {
+      if ('${product['type']}' != 'PHONE' || asInt(product['active']) == 0 || asInt(product['stock']) <= 0) return false;
+      if (selected != null && selected != 'phones' && product['category_id'] != selected) return false;
+      final blob = '${product['name']} ${product['storage']} ${product['ram']} ${product['screen']} ${product['color']}'.toLowerCase();
+      return _query.isEmpty || blob.contains(_query);
+    }).toList();
+  }
+
+  Widget _pileCard(Map<String, Object?> product) {
+    return _tile(
+      icon: Icons.smartphone,
+      title: '${product['name']}',
+      subtitle: unitSpec(product),
+      price: asDouble(product['price']),
+      foot: tf('Stoo {0}', ['${product['stock']}']),
+      onTap: () => _takeGroup(product),
+    );
+  }
+
   Widget _phoneCard(Map<String, Object?> phone) {
     return _tile(
       icon: Icons.smartphone,
       title: '${phone['product_name']}',
-      subtitle: '${phone['storage'] ?? ''} · ${phone['color'] ?? ''}',
+      subtitle: unitSpec(phone),
       price: asDouble(phone['price']),
       foot: maskImei('${phone['imei']}'),
-      onTap: () => widget.store.addPhone(phone),
+      onTap: () => _take(phone, phoneItem: true),
     );
   }
 
@@ -190,9 +260,10 @@ class _SellPageState extends State<SellPage> {
         '${product['size'] ?? ''}'.trim(),
       ].where((part) => part.isNotEmpty).join(' · '),
       price: asDouble(product['price']),
-      foot: low ? 'Nayo ${product['stock']}' : 'Stoo ${product['stock']}',
+      priceLabel: 'Jumla',
+      foot: low ? tf('Nayo {0}', ['${product['stock']}']) : tf('Stoo {0}', ['${product['stock']}']),
       footColor: low ? const Color(0xFFB45309) : muted,
-      onTap: () => widget.store.addProduct(product),
+      onTap: () => _take(product, phoneItem: false),
     );
   }
 
@@ -203,6 +274,7 @@ class _SellPageState extends State<SellPage> {
     required double price,
     required String foot,
     required VoidCallback onTap,
+    String priceLabel = 'Jumla',
     Color footColor = muted,
   }) {
     return TapScale(
@@ -221,7 +293,7 @@ class _SellPageState extends State<SellPage> {
               Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, color: ink)),
               Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: muted, fontSize: 12)),
               const SizedBox(height: 6),
-              Text(tsh(price), style: const TextStyle(color: skyDeep, fontWeight: FontWeight.w600, fontSize: 15)),
+              Text('${t(priceLabel)} ${tsh(price)}', style: const TextStyle(color: skyDeep, fontWeight: FontWeight.w600, fontSize: 15)),
               Text(foot, style: TextStyle(color: footColor, fontSize: 12, fontWeight: FontWeight.w600)),
             ],
           ),
@@ -244,7 +316,7 @@ class _SellPageState extends State<SellPage> {
         children: [
           Row(
             children: [
-              const Text('Kikapu', style: sectionStyle),
+              Text(t('Kikapu'), style: sectionStyle),
               const SizedBox(width: 8),
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 180),
@@ -266,12 +338,7 @@ class _SellPageState extends State<SellPage> {
               Text(tsh(store.cartTotal), style: const TextStyle(fontWeight: FontWeight.w600, color: ink)),
             ],
           ),
-          if (store.cart.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 10),
-              child: Text('Gusa bidhaa. Kuondoa, itapita kwenye pipa.', style: TextStyle(color: muted, fontSize: 12)),
-            )
-          else
+          if (store.cart.isNotEmpty)
             ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 180),
               child: ListView(
@@ -287,6 +354,7 @@ class _SellPageState extends State<SellPage> {
                         if (mounted) setState(() => _binHot = false);
                       },
                       onQty: (delta) => store.changeQty(line, delta),
+                      onPrice: () => _editPrice(line),
                     ),
                 ],
               ),
@@ -301,13 +369,13 @@ class _SellPageState extends State<SellPage> {
                   store.clearCart();
                   if (mounted) setState(() => _binHot = false);
                 },
-                child: const Text('Futa vyote'),
+                child: Text(t('Futa vyote')),
               ),
               const Spacer(),
               FilledButton(
                 onPressed: store.cart.isEmpty ? null : _pay,
                 style: FilledButton.styleFrom(minimumSize: const Size(140, 46)),
-                child: const Text('Lipa'),
+                child: Text(t('Lipa')),
               ),
             ],
           ),
@@ -317,11 +385,72 @@ class _SellPageState extends State<SellPage> {
     );
   }
 
+  Future<void> _takeGroup(Map<String, Object?> product, {bool faulty = false}) async {
+    final name = '${product['name']}';
+    final price = await askSalePrice(context, name: name, wholesale: asDouble(product['price']));
+    if (price == null || !mounted) return;
+    final imei = await askImei(context, widget.store, name: name);
+    if (imei == null || !mounted) return;
+    final held = await widget.store.db.imeiHeld(imei);
+    if (!mounted) return;
+    if (held) {
+      toast(context, t('IMEI hii tayari ipo.'));
+      return;
+    }
+    final error = widget.store.addPhoneGroup(product, salePrice: price, imei: imei, faulty: faulty);
+    if (error != null) toast(context, error);
+  }
+
+  Future<void> _take(Map<String, Object?> item, {required bool phoneItem}) async {
+    final id = item['id'];
+    final already = phoneItem
+        ? widget.store.cart.any((line) => line.phoneId == id)
+        : widget.store.cart.any((line) => line.productId == id);
+    if (already) {
+      if (phoneItem) {
+        widget.store.addPhone(item);
+      } else {
+        widget.store.addProduct(item);
+      }
+      return;
+    }
+    final name = phoneItem ? '${item['product_name']}' : '${item['name']}';
+    final price = await askSalePrice(context, name: name, wholesale: asDouble(item['price']));
+    if (price == null || !mounted) return;
+    if (phoneItem) {
+      widget.store.addPhone(item, salePrice: price);
+    } else {
+      widget.store.addProduct(item, salePrice: price);
+    }
+  }
+
+  Future<void> _editPrice(CartLine line) async {
+    final price = await askSalePrice(context, name: line.name, wholesale: line.price, editing: true);
+    if (price == null) return;
+    widget.store.setLinePrice(line, price);
+  }
+
   Future<void> _scan() async {
-    final code = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => const ScanPage()));
+    widget.store.holdLock = true;
+    String? code;
+    try {
+      code = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => const ScanPage()));
+    } finally {
+      widget.store.holdLock = false;
+    }
     if (code == null || code.trim().isEmpty || !mounted) return;
-    final error = await widget.store.scan(code);
-    if (error != null && mounted) toast(context, error);
+    final found = await widget.store.findCode(code);
+    if (!mounted) return;
+    if (found.error != null || found.item == null) {
+      toast(context, found.error ?? t('Hakuna bidhaa yenye msimbo huo.'));
+      return;
+    }
+    await _take(found.item!, phoneItem: found.item!['kind'] == 'phone');
+  }
+
+  void openPay() {
+    if (!mounted || widget.store.cart.isEmpty) return;
+    _pay();
   }
 
   Future<void> _pay() async {
@@ -342,12 +471,111 @@ class _SellPageState extends State<SellPage> {
   }
 }
 
+Future<double?> askSalePrice(BuildContext context, {required String name, required double wholesale, bool editing = false}) {
+  final field = TextEditingController(text: wholesale > 0 ? wholesale.round().toString() : '');
+  return showDialog<double>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(editing ? t('Badilisha bei') : t('Bei ya kuuza')),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(name, style: const TextStyle(fontWeight: FontWeight.w700, color: ink)),
+          const SizedBox(height: 6),
+          Text(
+            editing ? t('Bei hii ndiyo itahesabiwa kwenye mauzo, deni, na faida.') : t('Bei ya jumla ni mwongozo. Andika bei unayomuuzia mteja huyu.'),
+            style: const TextStyle(color: muted, fontSize: 13),
+          ),
+          const SizedBox(height: 12),
+          SoftField(controller: field, label: t('Anachotakiwa kulipa'), keyboard: TextInputType.number, digitsOnly: true, maxLength: 9),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(t('Ghairi'))),
+        FilledButton(
+          onPressed: () {
+            final price = int.tryParse(field.text.trim())?.toDouble() ?? 0;
+            if (price <= 0 || price > 100000000) {
+              toast(context, t('Andika bei ya kuuza.'));
+              return;
+            }
+            Navigator.pop(context, price);
+          },
+          child: Text(t('Weka')),
+        ),
+      ],
+    ),
+  ).whenComplete(field.dispose);
+}
+
+Future<String?> askImei(BuildContext context, ShopStore store, {required String name}) {
+  final field = TextEditingController();
+  return showDialog<String>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(t('IMEI')),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(name, style: const TextStyle(fontWeight: FontWeight.w700, color: ink)),
+          const SizedBox(height: 12),
+          SoftField(
+            controller: field,
+            label: t('IMEI'),
+            keyboard: TextInputType.number,
+            digitsOnly: true,
+            maxLength: 20,
+            minDigits: 8,
+            rule: t('IMEI iwe tarakimu 8 hadi 20.'),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () async {
+                store.holdLock = true;
+                String? code;
+                try {
+                  code = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => const ScanPage(action: 'Weka IMEI')));
+                } finally {
+                  store.holdLock = false;
+                }
+                if (code == null) return;
+                final digits = code.replaceAll(RegExp(r'\D'), '');
+                field.text = digits.length >= 8 ? digits : code.trim();
+              },
+              icon: const Icon(Icons.qr_code_scanner),
+              label: Text(t('Skani IMEI')),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(t('Ghairi'))),
+        FilledButton(
+          onPressed: () {
+            final digits = field.text.replaceAll(RegExp(r'\D'), '');
+            if (!RegExp(r'^\d{8,20}$').hasMatch(digits)) {
+              toast(context, t('IMEI iwe tarakimu 8 hadi 20.'));
+              return;
+            }
+            Navigator.pop(context, digits);
+          },
+          child: Text(t('Weka')),
+        ),
+      ],
+    ),
+  ).whenComplete(field.dispose);
+}
+
 class _ThrowTile extends StatefulWidget {
-  const _ThrowTile({super.key, required this.line, required this.onStart, required this.onThrow, required this.onQty});
+  const _ThrowTile({super.key, required this.line, required this.onStart, required this.onThrow, required this.onQty, required this.onPrice});
   final CartLine line;
   final VoidCallback onStart;
   final VoidCallback onThrow;
   final void Function(int delta) onQty;
+  final VoidCallback onPrice;
 
   @override
   State<_ThrowTile> createState() => _ThrowTileState();
@@ -392,16 +620,17 @@ class _ThrowTileState extends State<_ThrowTile> with SingleTickerProviderStateMi
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(line.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, color: ink)),
-                  Text(line.imei == null ? tsh(line.lineTotal) : maskImei(line.imei!), style: const TextStyle(color: muted, fontSize: 12)),
+                  Text(line.faulty ? '${line.name} · ${t('Matatizo')}' : line.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, color: ink)),
+                  Text(line.imei == null ? tf('Bei {0} · {1}', [tsh(line.price), tsh(line.lineTotal)]) : '${maskImei(line.imei!)} · ${tsh(line.price)}', style: const TextStyle(color: muted, fontSize: 12)),
                 ],
               ),
             ),
-            if (line.phoneId == null) ...[
+            if (line.phoneId == null && (line.imei ?? '').isEmpty) ...[
               IconButton(onPressed: () => line.qty == 1 ? _away() : widget.onQty(-1), icon: const Icon(Icons.remove_circle_outline, color: skyDeep)),
               Text('${line.qty}', style: const TextStyle(fontWeight: FontWeight.w600)),
               IconButton(onPressed: () => widget.onQty(1), icon: const Icon(Icons.add_circle_outline, color: skyDeep)),
             ],
+            IconButton(onPressed: widget.onPrice, icon: const Icon(Icons.edit_outlined, color: skyDeep)),
             IconButton(onPressed: _away, icon: const Icon(Icons.delete_outline, color: Color(0xFFDC2626))),
           ],
         ),
@@ -423,15 +652,17 @@ class _PaySheetState extends State<_PaySheet> {
   final _phone = TextEditingController();
   final _amount = TextEditingController();
   final _ref = TextEditingController();
+  final _term = TextEditingController();
   String _kind = 'CASH';
   String _partMethod = 'CASH';
+  String _termUnit = 'SIKU';
   bool _busy = false;
   bool _fresh = true;
 
   @override
   void initState() {
     super.initState();
-    _amount.text = widget.store.cartTotal.round().toString();
+    _amount.text = '0';
     _amount.addListener(() {
       if (mounted) setState(() {});
     });
@@ -443,7 +674,15 @@ class _PaySheetState extends State<_PaySheet> {
     _phone.dispose();
     _amount.dispose();
     _ref.dispose();
+    _term.dispose();
     super.dispose();
+  }
+
+  int get _termDays {
+    final count = int.tryParse(_term.text.trim()) ?? 0;
+    if (_termUnit == 'WIKI') return count * 7;
+    if (_termUnit == 'MWEZI') return count * 30;
+    return count;
   }
 
   bool get _cash => _kind == 'CASH' || (_kind == 'PART' && _partMethod == 'CASH');
@@ -459,35 +698,37 @@ class _PaySheetState extends State<_PaySheet> {
     final debt = (total - (_cash ? raw : handed)).clamp(0, double.infinity).toDouble();
     final canDebt = widget.store.seeDebts;
     final confirm = change > 0
-        ? 'Thibitisha · rudisha ${tsh(change)}'
+        ? tf('Thibitisha · rudisha {0}', [tsh(change)])
         : debt > 0.5
-            ? 'Thibitisha · deni ${tsh(debt)}'
-            : 'Thibitisha mauzo';
+            ? tf('Thibitisha · deni {0}', [tsh(debt)])
+            : t('Thibitisha mauzo');
     return Column(
       children: [
         Expanded(
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
             children: [
-              const Text('Malipo', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: ink)),
+              Text(t('Malipo'), style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: ink)),
               const SizedBox(height: 12),
-              SoftField(controller: _name, label: 'Jina la mteja', maxLength: 40),
+              SoftField(controller: _name, label: t('Jina la mteja'), maxLength: 40),
               const SizedBox(height: 8),
               SoftField(
                 controller: _phone,
-                label: 'Simu ya mteja',
+                label: t('Simu ya mteja'),
                 keyboard: TextInputType.phone,
                 phone: true,
+                contacts: true,
+                nameWith: _name,
               ),
               const SizedBox(height: 12),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  _payChip('CASH', 'Cash'),
-                  _payChip('LIPA', 'Lipa Namba'),
-                  if (canDebt) _payChip('PART', 'Deni nusu'),
-                  if (canDebt) _payChip('ALL', 'Deni zima'),
+                  _payChip('CASH', t('Cash')),
+                  _payChip('LIPA', t('Lipa Namba')),
+                  if (canDebt) _payChip('PART', t('Deni nusu')),
+                  if (canDebt) _payChip('ALL', t('Deni zima')),
                 ],
               ),
               if (_kind == 'PART') ...[
@@ -496,16 +737,37 @@ class _PaySheetState extends State<_PaySheet> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _partChip('CASH', 'Cash'),
-                    _partChip('LIPA', 'Lipa Namba'),
+                    _partChip('CASH', t('Cash')),
+                    _partChip('LIPA', t('Lipa Namba')),
                   ],
                 ),
+              ],
+              if (debt > 0.5 && canDebt) ...[
+                const SizedBox(height: 12),
+                Text(t('Anakopa kwa muda gani?'), style: TextStyle(fontWeight: FontWeight.w600, color: ink)),
+                const SizedBox(height: 4),
+                Text(t('Chini ya mwezi, ukumbusho siku 1 kabla. Mwezi au zaidi, siku 3 kabla.'), style: captionStyle),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final unit in [('SIKU', t('Siku')), ('WIKI', t('Wiki')), ('MWEZI', t('Mwezi'))])
+                      ChoiceChip(
+                        label: Text(t(unit.$2)),
+                        selected: _termUnit == unit.$1,
+                        selectedColor: sky,
+                        onSelected: (_) => setState(() => _termUnit = unit.$1),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SoftField(controller: _term, label: t('Muda'), keyboard: TextInputType.number, digitsOnly: true, maxLength: 4),
               ],
               if (_kind == 'LIPA' || (_kind == 'PART' && _partMethod == 'LIPA')) ...[
                 const SizedBox(height: 12),
                 _lipaCard(context),
                 const SizedBox(height: 8),
-                SoftField(controller: _ref, label: 'Kumbukumbu namba (si lazima)', maxLength: 40),
+                SoftField(controller: _ref, label: t('Kumbukumbu ya Lipa'), maxLength: 40),
               ],
               if (_kind == 'ALL') ...[
                 const SizedBox(height: 12),
@@ -514,7 +776,7 @@ class _PaySheetState extends State<_PaySheet> {
                 const SizedBox(height: 12),
                 _tally(total: total, handed: _cash ? raw : handed, change: change, debt: debt),
                 const SizedBox(height: 10),
-                _pad(total),
+                Directionality(textDirection: TextDirection.ltr, child: _pad(total)),
               ],
             ],
           ),
@@ -527,7 +789,9 @@ class _PaySheetState extends State<_PaySheet> {
               width: double.infinity,
               child: FilledButton(
                 onPressed: _busy ? null : () => _submit(cash: _cash),
-                child: Text(_busy ? 'Inahifadhi...' : confirm),
+                child: _busy
+                    ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
+                    : Text(confirm),
               ),
             ),
           ),
@@ -543,14 +807,14 @@ class _PaySheetState extends State<_PaySheet> {
       decoration: BoxDecoration(color: skyPage, borderRadius: BorderRadius.circular(18)),
       child: Column(
         children: [
-          _figure('Jumla', tsh(total), ink, strong: false),
+          _figure(t('Anachotakiwa kulipa'), tsh(total), ink, strong: false),
           const SizedBox(height: 8),
-          _figure('Alichotoa', tsh(handed), ink, strong: true),
+          _figure(t('Alichotoa'), tsh(handed), ink, strong: true),
           const SizedBox(height: 8),
           if (debt > 0.5)
-            _figure('Deni litabaki', tsh(debt), const Color(0xFFB45309), strong: true)
+            _figure(t('Deni litabaki'), tsh(debt), const Color(0xFFB45309), strong: true)
           else
-            _figure('Alichorudishiwa', tsh(change), skyDeep, strong: true),
+            _figure(t('Alichorudishiwa'), tsh(change), skyDeep, strong: true),
         ],
       ),
     );
@@ -570,13 +834,15 @@ class _PaySheetState extends State<_PaySheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Text(t('Andika alichotoa mteja. Sahihi ikiwa amelipa kiasi chote.'), style: TextStyle(color: muted, fontSize: 12)),
+        const SizedBox(height: 8),
         if (_cash) ...[
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
               ActionChip(
-                label: const Text('Sahihi'),
+                label: Text(t('Sahihi')),
                 onPressed: () => _setAmount(total.round(), fresh: true),
               ),
               for (final note in notes)
@@ -601,7 +867,7 @@ class _PaySheetState extends State<_PaySheet> {
                 color: key == 'C' ? const Color(0xFFFFF7ED) : Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
-                  side: const BorderSide(color: Color(0xFFD7F3FF)),
+                  side: const BorderSide(color: Color(0xFFD7EED0)),
                 ),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(14),
@@ -656,13 +922,13 @@ class _PaySheetState extends State<_PaySheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Mteja alipe namba hii, nje ya simu hii', style: TextStyle(color: muted, fontSize: 12)),
+          Text(t('Mteja alipe namba hii, nje ya simu hii'), style: TextStyle(color: muted, fontSize: 12)),
           const SizedBox(height: 4),
           Row(
             children: [
               Expanded(
                 child: Text(
-                  widget.store.lipaNumber.isEmpty ? 'Weka Lipa Namba kwenye mipangilio' : widget.store.lipaNumber,
+                  widget.store.lipaNumber.isEmpty ? t('Weka Lipa Namba kwenye mipangilio') : widget.store.lipaNumber,
                   style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w600, color: ink),
                 ),
               ),
@@ -670,7 +936,7 @@ class _PaySheetState extends State<_PaySheet> {
                 IconButton(
                   onPressed: () async {
                     await Clipboard.setData(ClipboardData(text: widget.store.lipaNumber));
-                    if (context.mounted) toast(context, 'Namba imenakiliwa');
+                    if (context.mounted) toast(context, t('Namba imenakiliwa'));
                   },
                   icon: const Icon(Icons.copy, color: skyDeep),
                 ),
@@ -705,7 +971,7 @@ class _PaySheetState extends State<_PaySheet> {
       final exact = widget.store.cartTotal.round();
       if (kind == 'CASH' || kind == 'LIPA') {
         _fresh = true;
-        _amount.text = '$exact';
+        _amount.text = '0';
       } else if (kind == 'ALL') {
         _fresh = true;
         _amount.text = '0';
@@ -727,6 +993,8 @@ class _PaySheetState extends State<_PaySheet> {
       method: _kind == 'ALL' ? 'DENI' : (_kind == 'PART' ? _partMethod : _kind),
       amount: amount,
       lipaRef: _ref.text,
+      termDays: _termDays,
+      termUnit: _termUnit,
     );
     if (!mounted) return;
     setState(() => _busy = false);
@@ -772,12 +1040,12 @@ class _ReceiptDialogState extends State<_ReceiptDialog> {
       paid: result.paid,
       change: result.change,
       balance: result.balance,
-      lines: [for (final line in result.lines) PaperLine(name: line.name, qty: line.qty, price: line.price)],
+      lines: [for (final line in result.lines) PaperLine(name: line.name, qty: line.qty, price: line.price, imei: line.imei ?? '')],
     );
-    final error = await sendWhatsappPdf(phone: widget.phone, bytes: bytes, filename: '${result.invoice}.pdf');
+    final error = await sendWhatsappPdf(phone: widget.phone, bytes: bytes, filename: '${result.invoice}.png');
     if (!mounted) return;
     setState(() => _sending = false);
-    toast(context, error ?? 'WhatsApp imefunguka kwa namba hii. Bonyeza Tuma.');
+    toast(context, error ?? t('WhatsApp imefunguka kwa namba hii. Bonyeza Tuma.'));
   }
 
   @override
@@ -789,7 +1057,7 @@ class _ReceiptDialogState extends State<_ReceiptDialog> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(width: 88, child: Text(label, style: captionStyle)),
+            SizedBox(width: 118, child: Text(label, style: captionStyle)),
             Expanded(child: Text(value, style: bodyStyle)),
           ],
         ),
@@ -797,7 +1065,7 @@ class _ReceiptDialogState extends State<_ReceiptDialog> {
     }
 
     return AlertDialog(
-      title: Text(result.balance > 0 ? 'Imeuzwa kwa deni' : 'Imeuzwa'),
+      title: Text(result.balance > 0 ? t('Imeuzwa kwa deni') : t('Imeuzwa')),
       content: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.5),
         child: SingleChildScrollView(
@@ -817,7 +1085,7 @@ class _ReceiptDialogState extends State<_ReceiptDialog> {
                         height: 52,
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
-                        child: Image.memory(widget.store.shopLogo!, fit: BoxFit.contain, filterQuality: FilterQuality.high),
+                        child: HoldPhoto(bytes: widget.store.shopLogo, fit: BoxFit.contain),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -830,34 +1098,31 @@ class _ReceiptDialogState extends State<_ReceiptDialog> {
               ],
               const Icon(Icons.check_circle, color: skyDeep, size: 36),
               const SizedBox(height: 12),
-              row('Risiti', result.invoice),
-              row('Mteja', result.customer),
-              row('Simu', showPhone(widget.phone).isEmpty ? '—' : showPhone(widget.phone)),
-              row('Malipo', methodLabel(result.method)),
-              if (result.method == 'LIPA' && widget.store.lipaNumber.isNotEmpty) row('Lipa', widget.store.lipaNumber),
-              row('Jumla', tsh(result.total)),
-              row('Alichotoa', tsh(result.paid + result.change)),
-              if (result.change > 0) row('Alichorudishiwa', tsh(result.change)),
-              if (result.balance > 0) row('Deni', tsh(result.balance)),
-              row('Muuzaji', result.cashier),
+              if (widget.store.shopLocation.trim().isNotEmpty) row(t('Mahali'), widget.store.shopLocation.trim()),
+              if (showPhone(widget.store.shopPhone).isNotEmpty) row(t('Simu ya duka'), showPhone(widget.store.shopPhone)),
+              row(t('Risiti'), result.invoice),
+              row(t('Mteja'), result.customer),
+              row(t('Simu'), showPhone(widget.phone).isEmpty ? '—' : showPhone(widget.phone)),
+              row(t('Malipo'), methodLabel(result.method)),
+              if (result.method == 'LIPA' && widget.store.lipaNumber.isNotEmpty) row(t('Lipa'), widget.store.lipaNumber),
+              row(t('Jumla'), tsh(result.total)),
+              row(t('Alichotoa'), tsh(result.paid + result.change)),
+              if (result.change > 0) row(t('Alichorudishiwa'), tsh(result.change)),
+              if (result.balance > 0) row(t('Deni'), tsh(result.balance)),
+              row(t('Muuzaji'), result.cashier),
               const Divider(),
-              for (final line in result.lines)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    children: [
-                      Expanded(child: Text('${line.name}  x${line.qty}', style: bodyStyle)),
-                      Text(tsh(line.lineTotal), style: const TextStyle(fontWeight: FontWeight.w600)),
-                    ],
-                  ),
-                ),
+              PaperLines(lines: [for (final line in result.lines) PaperLine(name: line.name, qty: line.qty, price: line.price, imei: line.imei ?? '')]),
+              if (widget.store.receiptFooter.trim().isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(widget.store.receiptFooter.trim(), style: captionStyle),
+              ],
             ],
           ),
         ),
       ),
       actions: [
-        TextButton(onPressed: _sending ? null : _send, child: Text(_sending ? 'Inaandaa...' : 'Tuma risiti')),
-        FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Maliza')),
+        TextButton(onPressed: _sending ? null : _send, child: Text(_sending ? t('Inaandaa...') : t('Tuma risiti'))),
+        FilledButton(onPressed: () => Navigator.pop(context), child: Text(t('Maliza'))),
       ],
     );
   }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../date_span.dart';
+import '../lang.dart';
 import '../money.dart';
 import '../receipt_pdf.dart';
 import '../shop_db.dart';
@@ -10,7 +12,7 @@ import '../whatsapp.dart';
 import '../widgets/ui.dart';
 
 class HistoryPage extends StatefulWidget {
-  const HistoryPage({super.key, required this.store, this.initialScope = 'all'});
+  const HistoryPage({super.key, required this.store, this.initialScope = 'today'});
   final ShopStore store;
   final String initialScope;
 
@@ -22,7 +24,7 @@ class _HistoryPageState extends State<HistoryPage> {
   final _search = TextEditingController();
   String _query = '';
   String _scope = 'all';
-  DateTime? _day;
+  DaySpan? _range;
 
   @override
   void initState() {
@@ -41,58 +43,125 @@ class _HistoryPageState extends State<HistoryPage> {
     return ListenableBuilder(
       listenable: widget.store,
       builder: (context, _) {
-        final rows = widget.store.filteredSales(query: _query, day: _day, scope: _scope);
+        final cut = widget.store.historyHiddenUntil;
+        final hidden = widget.store.hiddenSales;
+        final rows = widget.store.filteredSales(query: _query, range: _range, scope: _scope).where((sale) {
+          if (hidden.contains('${sale['id']}')) return false;
+          if (cut == null) return true;
+          final when = DateTime.tryParse('${sale['created_at']}');
+          return when != null && when.isAfter(cut);
+        }).toList();
         final groups = <String, List<Map<String, Object?>>>{};
         for (final sale in rows) {
           final when = DateTime.tryParse('${sale['created_at']}')?.toLocal();
           final key = when == null ? '—' : formatDay(when);
           groups.putIfAbsent(key, () => []).add(sale);
         }
+        final flat = <Object>[];
+        for (final entry in groups.entries) {
+          flat.add(entry.key);
+          flat.addAll(entry.value);
+        }
         return Scaffold(
           backgroundColor: skyPage,
-          appBar: AppBar(title: Text(widget.store.seeAllSales ? 'Historia ya mauzo' : 'Mauzo yangu', style: const TextStyle(fontWeight: FontWeight.w600))),
-          body: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          appBar: AppBar(
+            leading: IconButton(
+              tooltip: t('Rudi'),
+              onPressed: () => Navigator.maybePop(context),
+              icon: const Icon(Icons.arrow_back),
+            ),
+            title: Text(widget.store.seeAllSales ? tx('Historia ya mauzo', 'Sales history') : tx('Mauzo yangu', 'My sales'), style: const TextStyle(fontWeight: FontWeight.w600)),
+            actions: [
+              if (cut != null || widget.store.hiddenSales.isNotEmpty)
+                IconButton(tooltip: t('Onyesha'), onPressed: _show, icon: const Icon(Icons.history)),
+              IconButton(tooltip: t('Ficha historia'), onPressed: _hide, icon: const Icon(Icons.visibility_off_outlined)),
+            ],
+          ),
+          body: Column(
             children: [
-              TextField(
-                controller: _search,
-                maxLength: 40,
-                inputFormatters: [LengthLimitingTextInputFormatter(40)],
-                onChanged: (value) => setState(() => _query = value.trim().toLowerCase()),
-                decoration: const InputDecoration(hintText: 'Tafuta risiti, mteja, bidhaa', prefixIcon: Icon(Icons.search), counterText: ''),
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                children: [
-                  for (final item in const [('Leo', 'today'), ('Wiki', 'week'), ('Mwezi', 'month'), ('Zote', 'all')])
-                    ChoiceChip(
-                      label: Text(item.$1),
-                      selected: _day == null && _scope == item.$2,
-                      selectedColor: sky,
-                      onSelected: (_) => setState(() {
-                        _day = null;
-                        _scope = item.$2;
-                      }),
+              if (cut != null || widget.store.hiddenSales.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+                    decoration: vaultCard(),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.history, color: skyDeep, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(t(cut != null ? 'Historia ya nyuma imefichwa.' : 'Risiti zimefichwa.'), style: const TextStyle(fontWeight: FontWeight.w600))),
+                        TextButton(onPressed: _show, child: Text(t('Onyesha'))),
+                      ],
                     ),
-                  ActionChip(
-                    avatar: const Icon(Icons.calendar_today, size: 16),
-                    label: Text(_day == null ? 'Siku fulani' : formatDay(_day!)),
-                    onPressed: _pickDay,
                   ),
-                  if (_day != null) ActionChip(label: const Text('Ondoa siku'), onPressed: () => setState(() => _day = null)),
-                ],
+                ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: TextField(
+                  controller: _search,
+                  maxLength: 40,
+                  inputFormatters: [LengthLimitingTextInputFormatter(40)],
+                  onChanged: (value) => setState(() => _query = value.trim().toLowerCase()),
+                  decoration: InputDecoration(hintText: t('Tafuta risiti, mteja, bidhaa, IMEI'), prefixIcon: Icon(Icons.search), counterText: ''),
+                ),
               ),
               const SizedBox(height: 8),
-              Text('${rows.length} risiti', style: captionStyle),
-              if (rows.isEmpty) const EmptyHint(text: 'Hakuna mauzo kwenye chaguo hili.'),
-              for (final entry in groups.entries) ...[
-                Padding(
-                  padding: const EdgeInsets.only(top: 14, bottom: 6),
-                  child: Text(entry.key, style: const TextStyle(fontWeight: FontWeight.w600, color: ink)),
+              SizedBox(
+                height: 42,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  children: [
+                    for (final item in [('Leo', 'today'), ('Wiki', 'week'), ('Mwezi', 'month'), ('Mwaka', 'year'), ('Zote', 'all')])
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: Text(t(item.$1)),
+                          selected: _range == null && _scope == item.$2,
+                          showCheckmark: false,
+                          selectedColor: skyDeep,
+                          backgroundColor: Colors.white,
+                          labelStyle: TextStyle(color: _range == null && _scope == item.$2 ? Colors.white : ink, fontWeight: FontWeight.w700),
+                          side: BorderSide(color: _range == null && _scope == item.$2 ? skyDeep : const Color(0xFFD7E8D4)),
+                          onSelected: (_) => setState(() {
+                            _range = null;
+                            _scope = item.$2;
+                          }),
+                        ),
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ActionChip(
+                        avatar: Icon(Icons.calendar_today, size: 16, color: _range == null ? skyDeep : Colors.white),
+                        label: Text(_range == null ? t('Tarehe') : _range!.label),
+                        backgroundColor: _range == null ? Colors.white : skyDeep,
+                        labelStyle: TextStyle(color: _range == null ? ink : Colors.white, fontWeight: FontWeight.w700),
+                        side: BorderSide(color: _range == null ? const Color(0xFFD7E8D4) : skyDeep),
+                        onPressed: _pickRange,
+                      ),
+                    ),
+                  ],
                 ),
-                for (final sale in entry.value) _saleTile(sale),
-              ],
+              ),
+              Expanded(
+                child: rows.isEmpty
+                    ? EmptyHint(text: t('Hakuna mauzo kwenye chaguo hili.'))
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                        itemCount: flat.length,
+                        itemBuilder: (context, index) {
+                          final item = flat[index];
+                          if (item is String) {
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 14, bottom: 6),
+                              child: Text(item, style: const TextStyle(fontWeight: FontWeight.w600, color: ink)),
+                            );
+                          }
+                          return _saleTile(item as Map<String, Object?>);
+                        },
+                      ),
+              ),
             ],
           ),
         );
@@ -113,14 +182,29 @@ class _HistoryPageState extends State<HistoryPage> {
     );
   }
 
-  Future<void> _pickDay() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _day ?? DateTime.now(),
-      firstDate: DateTime(2024),
-      lastDate: DateTime.now().add(const Duration(days: 1)),
+  Future<void> _hide() async {
+    final ok = await confirm(
+      context,
+      t('Ficha historia'),
+      t('Historia itaondoka kwenye ukurasa huu. Mauzo, madeni na ripoti zinabaki.'),
     );
-    if (picked != null) setState(() => _day = picked);
+    if (!mounted) return;
+    if (!ok) {
+      toast(context, t('Imesitishwa.'));
+      return;
+    }
+    await widget.store.hideHistory();
+    if (mounted) toast(context, t('Historia imefichwa.'));
+  }
+
+  Future<void> _show() async {
+    await widget.store.showHistory();
+    if (mounted) toast(context, t('Historia imeonekana.'));
+  }
+
+  Future<void> _pickRange() async {
+    final picked = await pickDaySpan(context, current: _range);
+    if (picked != null && mounted) setState(() => _range = picked);
   }
 
   Widget _saleTile(Map<String, Object?> sale) {
@@ -128,10 +212,10 @@ class _HistoryPageState extends State<HistoryPage> {
     final balance = asDouble(sale['balance']);
     final returned = asDouble(sale['returned']);
     final status = voided
-        ? 'Imefutwa'
+        ? t('Imefutwa')
         : returned > 0.5
-            ? 'Imerudishwa ${tsh(returned)}'
-            : (balance > 0 ? 'Deni ${tsh(balance)}' : methodLabel('${sale['method']}'));
+            ? tf('Imerudishwa {0}', [tsh(returned)])
+            : (balance > 0 ? tf('Deni {0}', [tsh(balance)]) : methodLabel('${sale['method']}'));
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
@@ -179,74 +263,85 @@ class _HistoryPageState extends State<HistoryPage> {
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        child: ListView(
+      builder: (sheetContext) => SizedBox(
+        height: MediaQuery.sizeOf(sheetContext).height * 0.88,
+        child: Column(
           children: [
-            Text('${sale['invoice']}', style: titleStyle),
-            const SizedBox(height: 4),
+            Row(
+              children: [
+                IconButton(tooltip: t('Rudi'), onPressed: () => Navigator.pop(sheetContext), icon: const Icon(Icons.arrow_back, color: ink)),
+                Expanded(child: Text('${sale['invoice']}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
+              ],
+            ),
+            Expanded(
+              child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          children: [
             Text(formatWhen('${sale['created_at']}'), style: captionStyle),
             const SizedBox(height: 14),
-            _line('Mteja', '${sale['customer_name']}'),
-            _line('Simu', showPhone('${sale['customer_phone']}').isEmpty ? '—' : showPhone('${sale['customer_phone']}')),
-            _line('Muuzaji', '${sale['cashier_name']}'),
-            _line('Malipo', '${methodLabel('${sale['method']}')} ${sale['lipa_ref']}'.trim()),
-            _line('Jumla', tsh(asDouble(sale['total']))),
-            _line('Alichotoa', tsh(asDouble(sale['paid']) + asDouble(sale['change_due']))),
-            if (asDouble(sale['returned']) > 0) _line('Imerudishwa', tsh(asDouble(sale['returned']))),
-            if (asDouble(sale['balance']) > 0) _line('Deni', tsh(asDouble(sale['balance']))),
-            if (asDouble(sale['change_due']) > 0) _line('Alichorudishiwa', tsh(asDouble(sale['change_due']))),
+            _line(t('Mteja'), '${sale['customer_name']}'),
+            _line(t('Simu'), showPhone('${sale['customer_phone']}').isEmpty ? '—' : showPhone('${sale['customer_phone']}')),
+            _line(t('Muuzaji'), '${sale['cashier_name']}'),
+            _line(t('Malipo'), '${methodLabel('${sale['method']}')} ${sale['lipa_ref']}'.trim()),
+            _line(t('Jumla'), tsh(asDouble(sale['total']))),
+            _line(t('Alichotoa'), tsh(asDouble(sale['paid']) + asDouble(sale['change_due']))),
+            if (asDouble(sale['returned']) > 0) _line(t('Imerudishwa'), tsh(asDouble(sale['returned']))),
+            if (asDouble(sale['balance']) > 0) _line(t('Deni'), tsh(asDouble(sale['balance']))),
+            if (asDouble(sale['change_due']) > 0) _line(t('Alichorudishiwa'), tsh(asDouble(sale['change_due']))),
             const SizedBox(height: 8),
             const Divider(),
-            for (final item in items)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('${item['name']}', style: bodyStyle),
-                          Text(
-                            item['imei'] == null
-                                ? 'Idadi ${item['qty']}${widget.store.returnedQty('${item['id']}') > 0 ? ' · imerudi ${widget.store.returnedQty('${item['id']}')}' : ''}'
-                                : maskImei('${item['imei']}'),
-                            style: captionStyle,
-                          ),
-                        ],
-                      ),
-                    ),
-                    Text(tsh(asDouble(item['price']) * asInt(item['qty'])), style: const TextStyle(fontWeight: FontWeight.w600)),
-                  ],
-                ),
-              ),
+            PaperLines(
+              lines: [
+                for (final item in items)
+                  PaperLine(
+                    name: widget.store.returnedQty('${item['id']}') > 0
+                        ? '${item['name']} · ${t('imerudi')} ${widget.store.returnedQty('${item['id']}')}'
+                        : '${item['name']}',
+                    qty: asInt(item['qty']),
+                    price: asDouble(item['price']),
+                    imei: '${item['imei'] ?? ''}',
+                  ),
+              ],
+            ),
             if (asInt(sale['voided']) == 0 && isTzPhone('${sale['customer_phone']}'))
               TextButton(
-                onPressed: () => _sendSale(context, sale, items),
-                child: const Text('Tuma risiti'),
+                onPressed: () => _sendSale(sheetContext, sale, items),
+                child: Text(t('Tuma risiti')),
               ),
             if (asInt(sale['voided']) == 0 && items.any((item) => asInt(item['qty']) > widget.store.returnedQty('${item['id']}')))
               TextButton(
                 onPressed: () {
-                  Navigator.pop(context);
+                  Navigator.pop(sheetContext);
                   _return(sale, items);
                 },
-                child: const Text('Rudisha bidhaa'),
+                child: Text(t('Rudisha bidhaa')),
               ),
+            TextButton(
+              onPressed: () async {
+                final ok = await confirm(sheetContext, t('Ficha risiti'), t('Risiti hii itaondoka kwenye historia. Mauzo, deni na stoo vinabaki.'));
+                if (!ok || !sheetContext.mounted) return;
+                await widget.store.hideSale('${sale['id']}');
+                if (!sheetContext.mounted) return;
+                Navigator.pop(sheetContext);
+                toast(sheetContext, 'Risiti imefichwa.');
+              },
+              child: Text(t('Ficha risiti')),
+            ),
             if (widget.store.isOwner && asInt(sale['voided']) == 0 && asDouble(sale['returned']) <= 0.5)
               TextButton(
                 onPressed: () async {
-                  final ok = await confirm(context, 'Futa risiti', 'Stoo itarudi. Huwezi kufuta kama deni tayari lina malipo.');
-                  if (!ok || !context.mounted) return;
+                  final ok = await confirm(sheetContext, t('Futa risiti'), t('Stoo itarudi. Huwezi kufuta kama deni tayari lina malipo.'));
+                  if (!ok || !sheetContext.mounted) return;
                   final error = await widget.store.voidSale(sale['id'] as String);
-                  if (!context.mounted) return;
-                  Navigator.pop(context);
-                  toast(context, error ?? 'Risiti imefutwa');
+                  if (!sheetContext.mounted) return;
+                  Navigator.pop(sheetContext);
+                  toast(sheetContext, error ?? 'Risiti imefutwa');
                 },
-                child: const Text('Futa risiti', style: TextStyle(color: Color(0xFFDC2626))),
+                child: Text(t('Futa risiti'), style: const TextStyle(color: Color(0xFFDC2626))),
               ),
+          ],
+        ),
+            ),
           ],
         ),
       ),
@@ -271,9 +366,9 @@ class _HistoryPageState extends State<HistoryPage> {
       ],
     );
     if (!context.mounted) return;
-    final error = await sendWhatsappPdf(phone: '${sale['customer_phone']}', bytes: bytes, filename: '${sale['invoice']}.pdf');
+    final error = await sendWhatsappPdf(phone: '${sale['customer_phone']}', bytes: bytes, filename: '${sale['invoice']}.png');
     if (!context.mounted) return;
-    toast(context, error ?? 'WhatsApp imefunguka kwa namba hii. Bonyeza Tuma.');
+    toast(context, error ?? t('WhatsApp imefunguka kwa namba hii. Bonyeza Tuma.'));
   }
 
   Future<void> _return(Map<String, Object?> sale, List<Map<String, Object?>> items) async {
@@ -288,16 +383,16 @@ class _HistoryPageState extends State<HistoryPage> {
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Bidhaa imerudi'),
+        title: Text(t('Bidhaa imerudi')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(outcome.invoice, style: const TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
-            Text('Thamani ${tsh(outcome.total)}'),
-            if (outcome.refund > 0) Text('Rudisha pesa ${tsh(outcome.refund)}'),
-            if (outcome.debtLeft > 0) Text('Deni lililobaki ${tsh(outcome.debtLeft)}'),
+            Text(tf('Thamani {0}', [tsh(outcome.total)])),
+            if (outcome.refund > 0) Text(tf('Rudisha pesa {0}', [tsh(outcome.refund)])),
+            if (outcome.debtLeft > 0) Text(tf('Deni lililobaki {0}', [tsh(outcome.debtLeft)])),
             const SizedBox(height: 8),
             Text(outcome.reason, style: captionStyle),
           ],
@@ -321,13 +416,13 @@ class _HistoryPageState extends State<HistoryPage> {
                   lines: [for (final line in outcome.lines) PaperLine(name: line.name, qty: line.qty, price: line.price)],
                 );
                 if (!context.mounted) return;
-                final error = await sendWhatsappPdf(phone: outcome.phone, bytes: bytes, filename: '${outcome.invoice}.pdf');
+                final error = await sendWhatsappPdf(phone: outcome.phone, bytes: bytes, filename: '${outcome.invoice}.png');
                 if (!context.mounted) return;
-                toast(context, error ?? 'WhatsApp imefunguka kwa namba hii. Bonyeza Tuma.');
+                toast(context, error ?? t('WhatsApp imefunguka kwa namba hii. Bonyeza Tuma.'));
               },
-              child: const Text('Tuma risiti'),
+              child: Text(t('Tuma risiti')),
             ),
-          FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Maliza')),
+          FilledButton(onPressed: () => Navigator.pop(context), child: Text(t('Maliza'))),
         ],
       ),
     );
@@ -347,6 +442,7 @@ class _ReturnSheet extends StatefulWidget {
 class _ReturnSheetState extends State<_ReturnSheet> {
   final _reason = TextEditingController();
   late final Map<String, int> _qty;
+  bool _faulty = false;
   bool _busy = false;
 
   @override
@@ -371,18 +467,26 @@ class _ReturnSheetState extends State<_ReturnSheet> {
       child: ListView(
         shrinkWrap: true,
         children: [
-          Text('Rudisha ${widget.sale['invoice']}', style: titleStyle),
+          Text(tf('Rudisha {0}', ["${widget.sale['invoice']}"]), style: titleStyle),
           const SizedBox(height: 6),
-          const Text('Chagua idadi na sababu. Stoo, deni, faida na ripoti zinajisasisha.', style: captionStyle),
+          Text(t('Chagua idadi na sababu. Stoo, deni, faida na ripoti zinajisasisha.'), style: captionStyle),
           const SizedBox(height: 12),
           for (final item in widget.items)
             _row(item),
           const SizedBox(height: 8),
-          SoftField(controller: _reason, label: 'Sababu ya kurudisha', maxLength: 120),
+          SoftField(controller: _reason, label: t('Sababu ya kurudisha'), maxLength: 120),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(t('Vina matatizo')),
+            subtitle: Text(t('Vitaingia stoo kama vifaa vyenye matatizo, na gharama yake itaingia kwenye faida.')),
+            value: _faulty,
+            activeThumbColor: skyDeep,
+            onChanged: (value) => setState(() => _faulty = value),
+          ),
           const SizedBox(height: 12),
           FilledButton(
             onPressed: _busy ? null : _save,
-            child: Text(_busy ? 'Inahifadhi...' : 'Thibitisha marejesho'),
+            child: Text(_busy ? 'Inahifadhi...' : t('Thibitisha marejesho')),
           ),
         ],
       ),
@@ -405,7 +509,7 @@ class _ReturnSheetState extends State<_ReturnSheet> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('${item['name']}', style: const TextStyle(fontWeight: FontWeight.w600, color: ink)),
-                  Text('Iliyobaki $left', style: captionStyle),
+                  Text(tf('Iliyobaki {0}', ['$left']), style: captionStyle),
                 ],
               ),
             ),
@@ -429,7 +533,7 @@ class _ReturnSheetState extends State<_ReturnSheet> {
     final outcome = await widget.store.returnSale(
       saleId: '${widget.sale['id']}',
       reason: _reason.text,
-      picks: [for (final entry in _qty.entries) ReturnPick(entry.key, entry.value)],
+      picks: [for (final entry in _qty.entries) ReturnPick(entry.key, entry.value, faulty: _faulty)],
     );
     if (!mounted) return;
     setState(() => _busy = false);

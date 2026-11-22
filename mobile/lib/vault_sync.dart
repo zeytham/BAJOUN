@@ -6,6 +6,30 @@ import 'package:flutter/foundation.dart';
 class VaultSync {
   static const shopServer = 'http://10.0.2.2:5000';
 
+  static Future<int?> waitRevision(String base, String token, int since) async {
+    final uri = _uri(base, '/api/sync/vault/head?since=$since');
+    if (uri == null) return null;
+    final client = HttpClient();
+    try {
+      client.connectionTimeout = const Duration(seconds: 8);
+      final request = await client.getUrl(uri).timeout(const Duration(seconds: 8));
+      _headers(request, token);
+      final response = await request.close().timeout(const Duration(seconds: 28));
+      if (response.statusCode < 200 || response.statusCode >= 300) return null;
+      final body = await response.transform(utf8.decoder).join();
+      final parsed = jsonDecode(body);
+      final data = parsed is Map ? parsed['data'] : null;
+      if (data is! Map) return null;
+      final value = data['revision'];
+      if (value is num) return value.toInt();
+      return int.tryParse('$value');
+    } catch (_) {
+      return null;
+    } finally {
+      client.close(force: true);
+    }
+  }
+
   static Future<Map<String, dynamic>?> pull(String base, String token) async {
     final uri = _uri(base, '/api/sync/vault');
     if (uri == null) return null;
@@ -14,7 +38,7 @@ class VaultSync {
       client.connectionTimeout = const Duration(seconds: 3);
       final request = await client.getUrl(uri).timeout(const Duration(seconds: 4));
       _headers(request, token);
-      final response = await request.close().timeout(const Duration(seconds: 8));
+      final response = await request.close().timeout(const Duration(seconds: 25));
       if (response.statusCode < 200 || response.statusCode >= 300) return null;
       final body = await response.transform(utf8.decoder).join();
       final parsed = jsonDecode(body);
