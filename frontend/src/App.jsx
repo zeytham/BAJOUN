@@ -39,6 +39,9 @@ const GROUPS = [
 const PAGES = GROUPS.flatMap((g) => g[1]);
 const LangCtx = createContext((t) => t);
 function useT() { return useContext(LangCtx); }
+function fill(text, ...parts) {
+  return parts.reduce((line, part, index) => line.replaceAll(`{${index}}`, String(part)), String(text ?? ''));
+}
 const FULL_PERMS = { stock:true, cost:true, history:true, debts:true, customers:true, reports:true, edit:true, analysis:true };
 const WhoCtx = createContext({ role:'OWNER', name:'', id:'', perms: FULL_PERMS });
 function useWho() { return useContext(WhoCtx); }
@@ -112,8 +115,9 @@ export default function App() {
   const [shopPick, setShopPick] = useState(() => sessionStorage.getItem('pv_shop'));
   const t = (text) => phrase(lang, text);
   const leaveShop = () => { sessionStorage.removeItem('pv_shop'); sessionStorage.removeItem('pv_staff'); setShopPick(null); };
+  const chooseLang = (next) => { localStorage.setItem('pv_lang', next); setLang(next); };
   const screen = !shopPick
-    ? <ShopDoor onPick={(v) => { sessionStorage.setItem('pv_shop', JSON.stringify(v)); setShopPick(JSON.stringify(v)); }} />
+    ? <ShopDoor lang={lang} onLang={chooseLang} onPick={(v) => { sessionStorage.setItem('pv_shop', JSON.stringify(v)); setShopPick(JSON.stringify(v)); }} />
     : (
       <Desk
         user={{ name: 'Duka', role: 'ADMIN', email: '' }}
@@ -219,7 +223,7 @@ function Gate({ onIn }) {
 /* ══════════════════════════════════════════════════════════════════
    SHOP DOOR
 ══════════════════════════════════════════════════════════════════ */
-function ShopDoor({ onPick }) {
+function ShopDoor({ onPick, lang, onLang }) {
   const t = useT();
   const [base, setBase] = useState('');
   const [token, setToken] = useState('');
@@ -252,8 +256,9 @@ function ShopDoor({ onPick }) {
           </div>
         </aside>
         <form className="pv-stage-form" onSubmit={remote}>
-          <div>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:12 }}>
             <h1 className="pv-hello">{t('Karibu')} <em>{t('tena')}</em></h1>
+            <LangMarks lang={lang} onPick={onLang} />
           </div>
           <label className="pv-field">
             <span>{t('Anwani ya duka')}</span>
@@ -393,7 +398,7 @@ function PinGate({ faces, error, lang, onLang, onIn, onSwitch, onOut }) {
 function Desk({ user, lang, onLang, onOut, onSwitch }) {
   const today = dayInput(new Date());
   const [page, setPage] = useState('nyumbani');
-  const [start, setStart] = useState('2026-01-01');
+  const [start, setStart] = useState('2000-01-01');
   const [end, setEnd] = useState(today);
   const [query, setQuery] = useState('');
   const [shop, setShop] = useState(null);
@@ -409,7 +414,6 @@ function Desk({ user, lang, onLang, onOut, onSwitch }) {
   });
   const [faces, setFaces] = useState(null);
   const [faceError, setFaceError] = useState('');
-  const langReady = useRef(false);
   const noticeTimer = useRef(null);
   const shopRef = useRef(null);
   const heldRange = useRef('');
@@ -432,6 +436,7 @@ function Desk({ user, lang, onLang, onOut, onSwitch }) {
       return [dayInput(day), endDay];
     }
     if (key === 'Mwezi huu') return [dayInput(new Date(now.getFullYear(), now.getMonth(), 1)), endDay];
+    if (key === 'Zote') return ['2000-01-01', endDay];
     return [`${now.getFullYear()}-01-01`, endDay];
   }
 
@@ -466,7 +471,6 @@ function Desk({ user, lang, onLang, onOut, onSwitch }) {
   };
 
   async function pickLang(next) {
-    langReady.current = true;
     localStorage.setItem('pv_lang', next);
     onLang(next);
     try { await api('/api/admin/shop/lang', { lang: next }, 'PUT'); } catch { /* ignore */ }
@@ -528,10 +532,6 @@ function Desk({ user, lang, onLang, onOut, onSwitch }) {
         heldRange.current = ask;
         rememberRevision(body.data?.revision);
         setShop(body.data);
-        const code = body.data?.shop?.lang;
-        if (!langReady.current && (code === 'sw' || code === 'en' || code === 'ar')) {
-          langReady.current = true; onLang(code);
-        }
       })
       .catch((err) => { if (live && err.name !== 'AbortError' && !shopRef.current) setError(err.message); })
       .finally(() => { if (live) { setLoading(false); setRefreshing(false); } });
@@ -660,7 +660,7 @@ function Desk({ user, lang, onLang, onOut, onSwitch }) {
               <div className="pv-tools no-print">
                 <LangMarks lang={lang} onPick={pickLang} />
                 <div className="pv-seg">
-                  {['Leo', 'Jana', 'Wiki hii', 'Mwezi huu', 'Mwaka huu'].map((key) => {
+                  {['Leo', 'Jana', 'Wiki hii', 'Mwezi huu', 'Mwaka huu', 'Zote'].map((key) => {
                     const [from, to] = periodBounds(key);
                     return (
                       <button type="button" key={key} className={start === from && end === to ? 'on' : ''} onClick={() => choosePeriod(key)}>{t(key)}</button>
@@ -897,7 +897,7 @@ function Home({ shop, onOpen }) {
           </div>
           {slices.map((s) => (
             <p key={s.name} style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginTop:4 }}>
-              <span><span style={{ display:'inline-block', width:8, height:8, borderRadius:99, background:s.color, marginRight:8 }} />{s.name}</span>
+              <span><span style={{ display:'inline-block', width:8, height:8, borderRadius:99, background:s.color, marginRight:8 }} />{t(s.name)}</span>
               <b>{tsh(s.value)}</b>
             </p>
           ))}
@@ -932,7 +932,7 @@ function Home({ shop, onOpen }) {
           </div>
           {groups.slice(0, 4).map((s) => (
             <p key={s.name} style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginTop:4 }}>
-              <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{s.name}</span>
+              <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t(s.name)}</span>
               <b>{tsh(s.value)}</b>
             </p>
           ))}
@@ -1090,7 +1090,7 @@ function Till({ shop, carry, onCarry, onSaved, faulty = false }) {
       <section className="pv-panel">
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
           <p style={{ fontWeight:800 }}>{t(faulty ? 'Matatizo ya kuuza' : 'Stoo ya kuuza')}</p>
-          <span style={{ fontSize:12, color:'var(--text-secondary)', fontWeight:700 }}>{units.length + goods.length} vinapatikana</span>
+          <span style={{ fontSize:12, color:'var(--text-secondary)', fontWeight:700 }}>{fill(t('{0} vinapatikana'), units.length + goods.length)}</span>
         </div>
         <div style={{ position:'relative', marginBottom:12 }}>
           <Search size={15} style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)', pointerEvents:'none' }} />
@@ -1121,7 +1121,7 @@ function Till({ shop, carry, onCarry, onSaved, faulty = false }) {
             >
               <div>
                 <p style={{ fontWeight:700, fontSize:14, color:'var(--text-primary)' }}>{it.name}</p>
-                <p style={{ fontSize:12, color:'var(--text-secondary)', marginTop:2 }}>{it.imei} · sakafu {tsh(it.floor || it.price)}</p>
+                <p style={{ fontSize:12, color:'var(--text-secondary)', marginTop:2 }}>{it.imei} · {fill(t('Sakafu {0}'), tsh(it.floor || it.price))}</p>
               </div>
               <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                 <span style={{ background:'rgba(128,192,80,0.1)', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:700, color:'var(--accent)' }}>{t('IMEI')}</span>
@@ -1138,7 +1138,7 @@ function Till({ shop, carry, onCarry, onSaved, faulty = false }) {
             >
               <div>
                 <p style={{ fontWeight:700, fontSize:14, color:'var(--text-primary)' }}>{it.name}</p>
-                <p style={{ fontSize:12, color:'var(--text-secondary)', marginTop:2 }}>{it.barcode || 'Bila msimbo'} · stoo {it.stock}</p>
+                <p style={{ fontSize:12, color:'var(--text-secondary)', marginTop:2 }}>{it.barcode || t('Bila msimbo')} · {fill(t('Stoo {0}'), it.stock)}</p>
               </div>
               <span style={{ fontWeight:700, fontSize:14, color:'var(--text-primary)' }}>{tsh(it.price)}</span>
             </button>
@@ -1234,7 +1234,7 @@ function Till({ shop, carry, onCarry, onSaved, faulty = false }) {
           disabled={!cart.length}
           style={{ background: cart.length?'var(--accent)':'rgba(128,192,80,0.2)', color: cart.length?'#fff':'rgba(128,192,80,0.4)', border:'none', borderRadius:10, padding:'13px', fontWeight:800, fontSize:15, cursor: cart.length?'pointer':'default', boxShadow: cart.length?'0 0 20px rgba(128,192,80,0.25)':'none', transition:'all .2s', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}
         >
-          <CheckCircle2 size={17} />Thibitisha Muamala
+          <CheckCircle2 size={17} />{t('Thibitisha Muamala')}
         </button>
 
         {/* Receipt */}
@@ -1702,12 +1702,49 @@ function Debts({ shop, query, setQuery, onSaved }) {
   const [error, setError] = useState('');
   const needle = query.trim().toLowerCase();
   const [order, setOrder] = useState('big');
+  const visibleDebt = (d) => d.status !== 'PAID' || !d.hidden;
   const rows = shop.debts
-    .filter((d) => (d.status||'OPEN')===tab && `${d.customer} ${d.phone}`.toLowerCase().includes(needle))
+    .filter((d) => visibleDebt(d) && (d.status||'OPEN')===tab && `${d.customer} ${d.phone}`.toLowerCase().includes(needle))
     .slice()
     .sort((a, b) => order === 'big' ? b.balance - a.balance : a.balance - b.balance);
   const openRows = shop.debts.filter((d) => (d.status || 'OPEN') === 'OPEN');
-  const paidRows = shop.debts.filter((d) => d.status === 'PAID');
+  const paidRows = shop.debts.filter((d) => d.status === 'PAID' && !d.hidden);
+  const hiddenPaid = shop.debts.some((d) => d.status === 'PAID' && d.hidden);
+  function remindDue(debt) {
+    const phone = String(debt.phone || '').replace(/\D/g, '');
+    if (!/^0\d{9}$/.test(phone)) return false;
+    const now = new Date();
+    const due = debt.due ? new Date(debt.due) : null;
+    const term = Number(debt.termDays) || 0;
+    let windowStart;
+    if (due && !Number.isNaN(due.getTime()) && term > 0) {
+      const lead = term >= 30 ? 3 : 1;
+      windowStart = new Date(due.getFullYear(), due.getMonth(), due.getDate() - lead);
+      if (now < windowStart) return false;
+    } else {
+      const opened = debt.at ? new Date(debt.at) : null;
+      if (!opened || Number.isNaN(opened.getTime()) || (now - opened) / 86400000 < 30) return false;
+      windowStart = new Date(opened.getFullYear(), opened.getMonth(), opened.getDate() + 30);
+    }
+    if (debt.reminded) {
+      const last = new Date(debt.reminded);
+      if (!Number.isNaN(last.getTime()) && last >= windowStart) return false;
+    }
+    return true;
+  }
+  function remind(debt) {
+    const phone = `255${String(debt.phone).replace(/\D/g, '').slice(1)}`;
+    const text = [
+      t('Ukumbusho wa deni'),
+      `${t('Mteja')}: ${debt.customer}`,
+      `${t('Simu')}: ${debt.phone}`,
+      `${t('Risiti')}: ${debt.invoice || t('Deni')}`,
+      `${t('Deni')}: ${tsh(debt.balance)}`,
+      t('Karibu dukani, au lipa kwenye namba ya duka, ili tuifunge hesabu yako.'),
+    ].join('\n');
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+    api(`/api/admin/debts/${debt.id}/remind`, {}, 'POST').then(() => onSaved(t('WhatsApp imefunguka kwa namba hii. Bonyeza Tuma.'))).catch((err) => setError(err.message));
+  }
 
   async function save(e) {
     e.preventDefault(); setError('');
@@ -1734,7 +1771,9 @@ function Debts({ shop, query, setQuery, onSaved }) {
           {[['OPEN','Wazi'],['PAID','Yamelipwa']].map(([id,label]) => (
             <KindTab key={id} active={tab===id} onClick={() => setTab(id)}>{t(label)}</KindTab>
           ))}
-          <KindTab active={order==='big'} secondary onClick={() => setOrder(order==='big' ? 'small' : 'big')}>{order==='big' ? 'Baki kubwa' : 'Baki ndogo'}</KindTab>
+          <KindTab active={order==='big'} secondary onClick={() => setOrder(order==='big' ? 'small' : 'big')}>{order==='big' ? t('Baki kubwa') : t('Baki ndogo')}</KindTab>
+          {tab==='PAID' && paidRows.length > 0 && <BtnSecondary onClick={() => api('/api/admin/debts/hide', { mode:'paid' }, 'POST').then(() => onSaved('Madeni yameondolewa.')).catch((err) => setError(err.message))}>{t('Ondoa yaliyolipwa')}</BtnSecondary>}
+          {hiddenPaid && <BtnSecondary onClick={() => api('/api/admin/debts/hide', { mode:'show' }, 'POST').then(() => onSaved('Madeni yameonekana.')).catch((err) => setError(err.message))}>{t('Onyesha')}</BtnSecondary>}
           <Pakua kind="madeni" start="2016-01-01" end="2099-01-01" />
         </div>
       </div>
@@ -1773,11 +1812,13 @@ function Debts({ shop, query, setQuery, onSaved }) {
               <p style={{ fontSize:22, fontWeight:800, color: debt.status==='PAID' ? '#0f172a' : 'var(--warning)' }}>{tsh(debt.balance)}</p>
               <div className="pv-bar"><i style={{ width:`${Math.round(done * 100)}%` }} /></div>
               <p style={{ fontSize:12, color:'var(--text-secondary)' }}>Chanzo {tsh(debt.principal)} · malipo {debt.payments.length}</p>
-              {debt.status !== 'PAID' && (
+              {debt.status !== 'PAID' ? (
                 <div style={{ display:'flex', gap:8 }}>
                   <BtnPrimary onClick={() => setPay({ id:debt.id, customer:debt.customer, balance:debt.balance, amount:'', method:'CASH', note:'' })}>{t('Pokea')}</BtnPrimary>
-                  <BtnSecondary onClick={() => api(`/api/admin/debts/${debt.id}/remind`, {}, 'POST').then(() => onSaved('Ukumbusho umewekwa.')).catch((err) => setError(err.message))}>{t('Kumbusha')}</BtnSecondary>
+                  {remindDue(debt) && <BtnSecondary onClick={() => remind(debt)}>{t('Ukumbusho')}</BtnSecondary>}
                 </div>
+              ) : (
+                <BtnSecondary onClick={() => api('/api/admin/debts/hide', { mode:'one', id:debt.id }, 'POST').then(() => onSaved('Deni limeondolewa.')).catch((err) => setError(err.message))}>{t('Ondoa deni')}</BtnSecondary>
               )}
             </article>
           );
@@ -1791,97 +1832,239 @@ function Debts({ shop, query, setQuery, onSaved }) {
 /* ══════════════════════════════════════════════════════════════════
    WINGS (MAWINGA)
 ══════════════════════════════════════════════════════════════════ */
+function Qty({ value, max, onChange }) {
+  return (
+    <div className="pv-qty">
+      <button type="button" className="pv-step" disabled={value <= 0} onClick={() => onChange(value - 1)}>−</button>
+      <b>{value}</b>
+      <button type="button" className="pv-step pv-step-add" disabled={value >= max} onClick={() => onChange(value + 1)}>+</button>
+    </div>
+  );
+}
+
 function Wings({ rows, shop, onSaved }) {
   const t = useT();
   const [back, setBack] = useState(null);
-  const [make, setMake] = useState(null);
+  const [make, setMake] = useState(false);
+  const [person, setPerson] = useState('');
+  const [phone, setPhone] = useState('');
+  const [note, setNote] = useState('');
+  const [find, setFind] = useState('');
+  const [kind, setKind] = useState('');
+  const [qty, setQty] = useState({});
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
   const [scope, setScope] = useState('out');
   const [q, setQ] = useState('');
+  const needle = find.trim().toLowerCase();
+  const cats = shop?.categories || [];
+  const phones = (shop?.units || []).filter((row) => row.status === 'IN_STOCK');
+  const goods = (shop?.stock || []).filter((row) => Number(row.stock) > 0);
   const open = rows.filter((r) => r.status !== 'BACK');
   const backRows = rows.filter((r) => r.status === 'BACK');
   const shown = rows.filter((r) => {
     if (scope === 'out' && r.status === 'BACK') return false;
     if (scope === 'back' && r.status !== 'BACK') return false;
-    return `${r.person} ${r.phone}`.toLowerCase().includes(q.trim().toLowerCase());
+    const blob = `${r.person} ${r.phone} ${(r.items || []).map((it) => it.name).join(' ')}`.toLowerCase();
+    return blob.includes(q.trim().toLowerCase());
   });
+  const chosen = Object.values(qty).filter((n) => Number(n) > 0).length;
 
+  function allow(row, phoneRow) {
+    if (!kind) return true;
+    if (kind === 'phones') return phoneRow || row.type === 'PHONE';
+    if (kind === 'goods') return !phoneRow && row.type !== 'PHONE';
+    const cat = cats.find((item) => item.id === kind);
+    if (!cat) return true;
+    const phoneCat = cat.kind === 'phone' || cat.id === 'phones';
+    if (phoneRow !== phoneCat) return false;
+    return kind === 'phones' || row.categoryId === kind;
+  }
+  function hit(name, extra, key) {
+    if ((qty[key] || 0) > 0) return true;
+    if (!needle) return true;
+    return `${name} ${extra}`.toLowerCase().includes(needle);
+  }
+  const phoneRows = phones.filter((row) => allow(row, true) && hit(row.name, row.imei, `phone:${row.id}`));
+  const goodRows = goods.filter((row) => allow(row, false) && hit(row.name, row.barcode, `product:${row.id}`));
+  const lines = [
+    ...phoneRows.map((row) => ({ key:`phone:${row.id}`, title:row.name, meta:fill(t('Simu · {0}'), row.imei), max:1, rank:(qty[`phone:${row.id}`] || 0) > 0 ? 0 : 1 })),
+    ...goodRows.map((row) => ({ key:`product:${row.id}`, title:row.name, meta:fill(t('Stoo {0}'), row.stock), max:Number(row.stock), rank:(qty[`product:${row.id}`] || 0) > 0 ? 0 : 1 })),
+  ].sort((a, b) => a.rank - b.rank || a.title.localeCompare(b.title));
+
+  function setCount(key, next, max) {
+    const n = Math.max(0, Math.min(max, next));
+    setQty((prev) => ({ ...prev, [key]: n }));
+  }
+  function openTake() {
+    setMake(true); setBack(null); setError('');
+    setPerson(''); setPhone(''); setNote(''); setFind(''); setKind(''); setQty({});
+  }
+  async function saveTake(e) {
+    e.preventDefault();
+    if (busy) return;
+    const picks = Object.entries(qty).filter(([, n]) => Number(n) > 0).map(([key, n]) => (
+      key.startsWith('phone:') ? { phoneId: key.slice(6), qty: 1 } : { productId: key.slice(8), qty: Number(n) }
+    ));
+    if (person.trim().length < 2) { setError('Weka jina la mtu aliyechukua.'); return; }
+    if (!picks.length) { setError('Chagua bidhaa aliyochukua.'); return; }
+    setBusy(true); setError('');
+    try {
+      await api('/api/admin/wings', { person, phone, note, picks }, 'POST');
+      setMake(false);
+      onSaved(t('Mtu amechukua'));
+    } catch (err) { setError(err.message); }
+    finally { setBusy(false); }
+  }
   async function send(e) {
-    e.preventDefault(); setError('');
-    try { await api(`/api/admin/wings/${back.id}/return`,{picks:back.items.filter((it)=>Number(it.give)>0).map((it)=>({id:it.id,qty:Number(it.give)}))}, 'POST'); setBack(null); onSaved('Mawinga yamerudi.'); }
-    catch (err) { setError(err.message); }
+    e.preventDefault();
+    if (busy) return;
+    const picks = back.items.filter((it) => Number(it.give) > 0).map((it) => ({ id: it.id, qty: Number(it.give) }));
+    if (!picks.length) { setError('Chagua idadi anayorudisha.'); return; }
+    const still = back.items.some((it) => it.qty - it.back - Number(it.give || 0) > 0);
+    setBusy(true); setError('');
+    try {
+      await api(`/api/admin/wings/${back.id}/return`, { picks }, 'POST');
+      setBack(null);
+      onSaved(still ? t('Sehemu imerudi stoo. Iliyobaki bado iko nje.') : t('Bidhaa zote zimerudi stoo.'));
+    } catch (err) { setError(err.message); }
+    finally { setBusy(false); }
   }
   async function drop(id) {
-    setError('');
-    try { await api(`/api/admin/wings/${id}`,null,'DELETE'); onSaved('Mrengo uliorudi umeondolewa.'); }
+    if (busy) return;
+    setBusy(true); setError('');
+    try { await api(`/api/admin/wings/${id}`, null, 'DELETE'); onSaved(t('Mawinga yameondolewa.')); }
     catch (err) { setError(err.message); }
+    finally { setBusy(false); }
   }
+  function give(id, next, max) {
+    setBack((row) => ({ ...row, items: row.items.map((it) => it.id === id ? { ...it, give: Math.max(0, Math.min(max, next)) } : it) }));
+  }
+  const empty = q.trim()
+    ? t('Hakuna mawinga yenye neno hilo.')
+    : (scope === 'back' ? t('Hakuna kilichorudi.') : t('Hakuna bidhaa iliyo nje kwa sasa.'));
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
       <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'space-between', gap:10, alignItems:'flex-start' }}>
         <div className="pv-stats" style={{ flex:1 }}>
-          <article className="pv-panel" style={{ padding:'12px 14px' }}><p style={{ fontSize:11, fontWeight:800, letterSpacing:'0.08em', textTransform:'uppercase', color:'var(--text-secondary)' }}>{t('Mawinga yaliyopo nje')}</p><p style={{ fontSize:22, fontWeight:800 }}>{open.length}</p></article>
-          <article className="pv-panel" style={{ padding:'12px 14px' }}><p style={{ fontSize:11, fontWeight:800, letterSpacing:'0.08em', textTransform:'uppercase', color:'var(--text-secondary)' }}>{t('Yaliyorudi')}</p><p style={{ fontSize:22, fontWeight:800 }}>{backRows.length}</p></article>
+          <article className="pv-panel" style={{ padding:'12px 14px' }}><p style={{ fontSize:11, fontWeight:800, letterSpacing:'0.08em', textTransform:'uppercase', color:'var(--text-secondary)' }}>{t('Hawajarudi')}</p><p style={{ fontSize:22, fontWeight:800 }}>{open.length}</p></article>
+          <article className="pv-panel" style={{ padding:'12px 14px' }}><p style={{ fontSize:11, fontWeight:800, letterSpacing:'0.08em', textTransform:'uppercase', color:'var(--text-secondary)' }}>{t('Zilizorudi')}</p><p style={{ fontSize:22, fontWeight:800 }}>{backRows.length}</p></article>
         </div>
-        <BtnPrimary onClick={() => setMake({person:'',phone:'',productId:shop?.stock?.[0]?.id||'',qty:'1'})} icon={Plus}>
-          Mawinga mapya
-        </BtnPrimary>
+        <BtnPrimary onClick={openTake} icon={Plus}>{t('Mtu amechukua')}</BtnPrimary>
       </div>
       <div style={{ display:'flex', flexWrap:'wrap', gap:8, alignItems:'center' }}>
-        <KindTab active={scope==='out'} onClick={() => setScope('out')}>{t('Yaliyopo nje')}</KindTab>
-        <KindTab active={scope==='back'} onClick={() => setScope('back')}>{t('Yaliyorudi')}</KindTab>
-        <KindTab active={scope==='all'} onClick={() => setScope('all')}>{t('Yote')}</KindTab>
-        <SearchBox value={q} onChange={setQ} placeholder={t('Tafuta aliyechukua')} />
+        <KindTab active={scope==='out'} onClick={() => setScope('out')}>{t('Hawajarudi')}</KindTab>
+        <KindTab active={scope==='back'} onClick={() => setScope('back')}>{t('Zilizorudi')}</KindTab>
+        <KindTab active={scope==='all'} onClick={() => setScope('all')}>{t('Zote')}</KindTab>
+        <SearchBox value={q} onChange={setQ} placeholder={t('Tafuta mtu au bidhaa')} />
       </div>
+      {error && <Warn>{t(error)}</Warn>}
 
       {make && (
-        <form style={{ background:'var(--bg-card)', border:'1px solid var(--border-subtle)', borderRadius:14, padding:20, display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))', gap:10 }}
-          onSubmit={async (e) => { e.preventDefault(); setError(''); try { await api('/api/admin/wings',{person:make.person,phone:make.phone,picks:[{productId:make.productId,qty:Number(make.qty)}]},'POST'); setMake(null); onSaved('Mrengo umeandikwa.'); } catch(err){setError(err.message);} }}
-        >
-          <input value={make.person} onChange={(e) => setMake({...make,person:e.target.value})} placeholder={t('Aliyechukua')} style={inputSx} />
-          <input value={make.phone} onChange={(e) => setMake({...make,phone:e.target.value})} placeholder={t('Simu')} style={inputSx} />
-          <select value={make.productId} onChange={(e) => setMake({...make,productId:e.target.value})} style={selectSx}>
-            {(shop?.stock||[]).filter((it)=>it.type!=='PHONE').map((it) => <option key={it.id} value={it.id}>{it.name}</option>)}
-          </select>
-          <input value={make.qty} onChange={(e) => setMake({...make,qty:e.target.value})} placeholder={t('Idadi')} style={inputSx} />
-          <BtnPrimary type="submit" icon={CheckCircle2}>{t('Hifadhi')}</BtnPrimary>
+        <form className="pv-pos" onSubmit={saveTake}>
+          <section className="pv-panel">
+            <p style={{ fontWeight:800, marginBottom:8 }}>{t('Tafuta jina au IMEI')}</p>
+            <SearchBox value={find} onChange={setFind} placeholder={t('Tafuta jina au IMEI')} />
+            <div className="pv-chips" style={{ margin:'12px 0' }}>
+              <KindTab active={kind===''} onClick={() => setKind('')}>{t('Zote')}</KindTab>
+              <KindTab active={kind==='phones'} onClick={() => setKind('phones')}>{t('Simu')}</KindTab>
+              <KindTab active={kind==='goods'} onClick={() => setKind('goods')}>{t('Vifaa')}</KindTab>
+              {cats.filter((row) => row.id !== 'phones').map((row) => (
+                <KindTab key={row.id} active={kind===row.id} secondary onClick={() => setKind(row.id)}>{row.name}</KindTab>
+              ))}
+            </div>
+            {chosen > 0 && <p style={{ fontWeight:700, color:'#509541', marginBottom:8 }}>{fill(t('Umechagua {0}'), chosen)}</p>}
+            <div className="pv-pos-list">
+              {!phones.length && !goods.length && <p style={{ color:'var(--text-secondary)' }}>{t('Hakuna bidhaa dukani ya kuazimisha.')}</p>}
+              {(phones.length > 0 || goods.length > 0) && !lines.length && <p style={{ color:'var(--text-secondary)' }}>{t('Hakuna bidhaa yenye neno hilo.')}</p>}
+              {lines.map((line) => (
+                <div key={line.key} className={`pv-pick${(qty[line.key] || 0) > 0 ? ' on' : ''}`}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <p style={{ fontWeight:700 }}>{line.title}</p>
+                    <p style={{ fontSize:12, color:'var(--text-secondary)' }}>{line.meta}</p>
+                  </div>
+                  <Qty value={qty[line.key] || 0} max={line.max} onChange={(n) => setCount(line.key, n, line.max)} />
+                </div>
+              ))}
+            </div>
+          </section>
+          <section className="pv-panel" style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            <p style={{ fontWeight:800, fontSize:18 }}>{t('Mtu amechukua')}</p>
+            <p style={{ fontSize:13, color:'var(--text-secondary)' }}>{t('Andika jina, kisha tafuta bidhaa aliyochukua. Muda unaandikwa peke yake.')}</p>
+            <input value={person} onChange={(e) => setPerson(e.target.value)} placeholder={t('Jina la mtu')} maxLength={60} style={inputSx} />
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t('Simu (si lazima)')} inputMode="tel" style={inputSx} />
+            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('Maelezo (si lazima)')} maxLength={80} style={inputSx} />
+            <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+              <BtnPrimary type="submit" icon={CheckCircle2} disabled={busy || (!phones.length && !goods.length)}>{t('Hifadhi')}</BtnPrimary>
+              <BtnSecondary type="button" onClick={() => setMake(false)}>{t('Ghairi')}</BtnSecondary>
+            </div>
+          </section>
         </form>
       )}
 
-      {error && <Warn>{error}</Warn>}
-
       {back && (
-        <form onSubmit={send} style={{ background:'var(--bg-card)', border:'1px solid var(--border-subtle)', borderRadius:14, padding:20, display:'flex', flexDirection:'column', gap:12 }}>
-          <p style={{ fontWeight:700, fontSize:15 }}>Rudisha · {back.person}</p>
-          {back.items.map((it, idx) => (
-            <div key={it.id} style={{ display:'grid', gridTemplateColumns:'1fr 5rem', gap:10, alignItems:'center' }}>
-              <span style={{ fontSize:13, color:'var(--text-secondary)' }}>{it.name} · nje {it.qty-it.back} · imerudi {it.back}</span>
-              <input value={it.give} onChange={(e) => { const items=back.items.slice(); items[idx]={...it,give:e.target.value}; setBack({...back,items}); }} style={inputSx} />
-            </div>
-          ))}
-          <BtnPrimary type="submit" icon={RotateCcw}>{t('Rudisha')}</BtnPrimary>
+        <form onSubmit={send} className="pv-panel" style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          <p style={{ fontWeight:800, fontSize:18 }}>{back.person}</p>
+          <p style={{ fontSize:13, color:'var(--text-secondary)' }}>{t('Chagua idadi anayorudisha sasa. Akirudisha kimoja, vilivyobaki vinabaki nje, na muda unaandikwa.')}</p>
+          {back.items.filter((it) => it.qty - it.back > 0).map((it) => {
+            const left = it.qty - it.back;
+            return (
+              <div key={it.id} className="pv-pick">
+                <div style={{ flex:1, minWidth:0 }}>
+                  <p style={{ fontWeight:700 }}>{it.name}</p>
+                  <p style={{ fontSize:12, color:'var(--text-secondary)' }}>{fill(t('Nje x{0}'), left)}</p>
+                </div>
+                <Qty value={Number(it.give) || 0} max={left} onChange={(n) => give(it.id, n, left)} />
+              </div>
+            );
+          })}
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+            <BtnSecondary type="button" onClick={() => setBack((row) => ({ ...row, items: row.items.map((it) => ({ ...it, give: Math.max(0, it.qty - it.back) })) }))}>{t('Rudisha zote')}</BtnSecondary>
+            <BtnPrimary type="submit" icon={RotateCcw} disabled={busy}>{t('Hifadhi kurudi')}</BtnPrimary>
+            <BtnSecondary type="button" onClick={() => setBack(null)}>{t('Ghairi')}</BtnSecondary>
+          </div>
         </form>
       )}
 
       <div className="pv-phone-grid">
-        {shown.map((r) => (
-          <article key={r.id} className="pv-panel">
-            <div style={{ display:'flex', justifyContent:'space-between', gap:8 }}>
-              <p style={{ fontWeight:800 }}>{r.person}</p>
-              <span style={{ fontSize:11, fontWeight:800, color: r.status==='BACK' ? '#509541' : 'var(--warning)' }}>{r.status==='BACK' ? 'Amerudi' : 'Nje'}</span>
-            </div>
-            <p style={{ fontSize:12, color:'var(--text-secondary)', margin:'6px 0' }}>{r.phone || 'Bila namba'} · baki {r.items.reduce((s, it) => s + it.qty - it.back, 0)}</p>
-            {r.items.map((it) => <p key={it.id} style={{ fontSize:13 }}>{it.name} · {it.back}/{it.qty}</p>)}
-            <div style={{ marginTop:10 }}>
-              {r.status==='BACK'
-                ? <BtnSecondary onClick={() => drop(r.id)}>{t('Ondoa')}</BtnSecondary>
-                : <BtnPrimary onClick={() => setBack({ id:r.id, person:r.person, items:r.items.map((it) => ({ ...it, give:'' })) })} icon={RotateCcw}>{t('Rudisha')}</BtnPrimary>}
-            </div>
-          </article>
-        ))}
+        {shown.map((r) => {
+          const away = r.status !== 'BACK';
+          return (
+            <article key={r.id} className="pv-panel">
+              <div style={{ display:'flex', justifyContent:'space-between', gap:8 }}>
+                <p style={{ fontWeight:800, fontSize:18 }}>{r.person}</p>
+                <span style={{ fontSize:12, fontWeight:800, color: away ? 'var(--warning)' : '#509541' }}>{away ? t('Nje') : t('Amerudi')}</span>
+              </div>
+              <p style={{ fontSize:13, color:'var(--text-secondary)', marginTop:4 }}>{r.phone || t('Bila namba')}</p>
+              <p style={{ fontSize:13, marginTop:6 }}>{fill(t('Alichukua {0}'), when(r.at))}</p>
+              {!away && r.returnedAt && <p style={{ fontSize:13 }}>{fill(t('Alirudisha {0}'), when(r.returnedAt))}</p>}
+              {r.staff && <p style={{ fontSize:12, color:'var(--text-secondary)' }}>{fill(t('Aliyeandika {0}'), r.staff)}</p>}
+              {r.note && <p style={{ fontSize:13, marginTop:4 }}>{r.note}</p>}
+              <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:10 }}>
+                {(r.items || []).map((it) => {
+                  const left = it.qty - it.back;
+                  return (
+                    <div key={it.id} style={{ display:'flex', justifyContent:'space-between', gap:8 }}>
+                      <span style={{ fontWeight:650 }}>{it.name}</span>
+                      <span style={{ fontWeight:800, color:'#509541', whiteSpace:'nowrap' }}>
+                        {away && it.back > 0 && <span style={{ fontWeight:600, color:'var(--text-secondary)', marginRight:8 }}>{fill(t('Amerudi x{0}'), it.back)}</span>}
+                        {away ? (left > 0 ? fill(t('Nje x{0}'), left) : t('Imerudi')) : `x${it.qty}`}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ marginTop:12 }}>
+                {away
+                  ? <BtnPrimary onClick={() => { setMake(false); setBack({ id:r.id, person:r.person, items:r.items.map((it) => ({ ...it, give:0 })) }); }} icon={RotateCcw}>{t('Rudisha')}</BtnPrimary>
+                  : <BtnSecondary onClick={() => drop(r.id)}>{t('Ondoa mawinga')}</BtnSecondary>}
+              </div>
+            </article>
+          );
+        })}
       </div>
-      {shown.length === 0 && <p style={{ color:'var(--text-secondary)' }}>{t('Hakuna mrengo katika kichujio hiki.')}</p>}
+      {shown.length === 0 && <p style={{ color:'var(--text-secondary)' }}>{empty}</p>}
     </div>
   );
 }
@@ -2252,7 +2435,7 @@ function Report({ shop, start, end }) {
           </div>
           {pie.slice(0, 5).map((s) => (
             <p key={s.name} style={{ display:'flex', justifyContent:'space-between', gap:8, fontSize:13, marginTop:4 }}>
-              <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}><span style={{ display:'inline-block', width:8, height:8, borderRadius:99, background:s.color, marginRight:8 }} />{s.name}</span>
+              <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}><span style={{ display:'inline-block', width:8, height:8, borderRadius:99, background:s.color, marginRight:8 }} />{t(s.name)}</span>
               <b>{tip(s.value)}</b>
             </p>
           ))}
@@ -2358,13 +2541,13 @@ function MiniPie({ title, slices, money = true }) {
             <Pie data={data} dataKey="value" nameKey="name" innerRadius={48} outerRadius={74} paddingAngle={3}>
               {data.map((s) => <Cell key={s.name} fill={s.color} />)}
             </Pie>
-            <Tooltip formatter={(v, name) => [name==='Bado' ? 0 : (money ? tsh(v) : v), name]} contentStyle={CHART_TIP} />
+            <Tooltip formatter={(v, name) => [name === 'Bado' ? 0 : (money ? tsh(v) : v), t(name)]} contentStyle={CHART_TIP} />
           </PieChart>
         </ResponsiveContainer>
       </div>
       {drawn.slice(0, 5).map((s) => (
         <p key={s.name} style={{ display:'flex', justifyContent:'space-between', gap:8, fontSize:13, marginTop:4 }}>
-          <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}><span style={{ display:'inline-block', width:8, height:8, borderRadius:99, background:s.color, marginRight:8 }} />{s.name}</span>
+          <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}><span style={{ display:'inline-block', width:8, height:8, borderRadius:99, background:s.color, marginRight:8 }} />{t(s.name)}</span>
           <b>{money ? tsh(s.value) : s.value}</b>
         </p>
       ))}
@@ -2585,7 +2768,7 @@ function Analysis({ shop }) {
           <div className="pv-sheet" style={{ border:'none' }}>
             <table>
               <thead><tr><th>{t('Kipengele')}</th><th>{t('Kiasi')}</th></tr></thead>
-              <tbody>{moneyLines.map((row) => <tr key={row[0]}><td>{row[0]}</td><td>{tsh(row[1])}</td></tr>)}</tbody>
+              <tbody>{moneyLines.map((row) => <tr key={row[0]}><td>{t(row[0])}</td><td>{tsh(row[1])}</td></tr>)}</tbody>
             </table>
           </div>
         </article>

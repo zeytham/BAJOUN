@@ -12,7 +12,6 @@ import {
   rows,
   signStaff,
   staffSession,
-  shopTarget,
   vaultFrom,
 } from './admin.controller.js';
 
@@ -29,6 +28,24 @@ function setMeta(vault, key, value) {
 
 function phoneOk(value) {
   return /^0\d{9}$/.test(String(value || '').replace(/\D/g, ''));
+}
+
+function imeiHeld(vault, imei) {
+  const code = String(imei || '').trim();
+  if (!code) return false;
+  if (rows(vault, 'phone_units').some((row) => String(row.imei) === code)) return true;
+  const returned = new Map();
+  for (const row of rows(vault, 'return_items')) {
+    const id = String(row.sale_item_id);
+    returned.set(id, (returned.get(id) || 0) + num(row.qty));
+  }
+  const voided = new Set(rows(vault, 'sales').filter((row) => num(row.voided) === 1).map((row) => String(row.id)));
+  return rows(vault, 'sale_items').some((row) => String(row.imei || '').trim() === code && !voided.has(String(row.sale_id)) && num(row.qty) > (returned.get(String(row.id)) || 0));
+}
+
+function categoryName(vault, id) {
+  const row = rows(vault, 'categories').find((item) => String(item.id) === String(id || ''));
+  return row?.name || '';
 }
 
 export async function checkout(req, res) {
@@ -53,14 +70,16 @@ export async function checkout(req, res) {
         const floor = num(phone.floor_price) || num(phone.price);
         const price = num(raw.price) || num(phone.price);
         if (price < floor) return `Bei ya ${phone.product_name} iko chini ya sakafu.`;
-        priced.push({ name: phone.product_name, qty: 1, price, cost: num(phone.cost), imei: phone.imei, phoneId: phone.id, productId: '', warranty: num(phone.warranty_days), faulty: phone.status === 'FAULTY', phone, product: null });
+        priced.push({ name: phone.product_name, qty: 1, price, cost: num(phone.cost), imei: phone.imei, phoneId: phone.id, productId: '', warranty: num(phone.warranty_days), faulty: phone.status === 'FAULTY', category: categoryName(vault, phone.category_id), phone, product: null });
       } else if (product) {
         const faulty = Boolean(raw.faulty);
         const have = faulty ? num(product.fault_qty) : num(product.stock);
         if (have < qty) return `Stoo ya ${product.name} haitoshi.`;
+        const code = String(raw.imei || '').replace(/\D/g, '').slice(0, 20);
+        if (code && imeiHeld(vault, code)) return 'IMEI hii tayari ipo.';
         const price = num(raw.price) || num(product.price);
         if (price < 0) return 'Bei si sahihi.';
-        priced.push({ name: product.name, qty, price, cost: num(product.cost), imei: String(raw.imei || '').replace(/\D/g, '').slice(0, 20), phoneId: '', productId: product.id, warranty: num(product.warranty_days), faulty, phone: null, product });
+        priced.push({ name: product.name, qty, price, cost: num(product.cost), imei: code, phoneId: '', productId: product.id, warranty: num(product.warranty_days), faulty, category: categoryName(vault, product.category_id), phone: null, product });
       } else return 'Bidhaa haipo.';
     }
     const total = priced.reduce((sum, line) => sum + line.price * line.qty, 0);
@@ -95,12 +114,21 @@ export async function checkout(req, res) {
       vault.sale_items.push({
         id: freshId(), sale_id: id, name: line.name, qty: line.qty, price: line.price, cost: line.cost,
         imei: line.imei, product_id: line.productId, phone_id: line.phoneId, warranty_months: 0,
-        warranty_days: line.warranty, category_name: '', faulty: line.faulty ? 1 : 0,
+        warranty_days: line.warranty, category_name: line.category || '', faulty: line.faulty ? 1 : 0,
       });
       if (!line.faulty) pushMove(vault, line.name, -line.qty, 'MAUZO', req);
       if (line.phone) line.phone.status = 'SOLD';
       else if (line.product && line.faulty) line.product.fault_qty = Math.max(0, num(line.product.fault_qty) - line.qty);
-      else if (line.product) line.product.stock = num(line.product.stock) - line.qty;
+      else if (line.product) {
+        line.product.stock = num(line.product.stock) - line.qty;
+        const level = line.product.reorder_level == null ? 3 : num(line.product.reorder_level);
+        if (num(line.product.stock) <= level) {
+          const kind = `LOW:${line.product.id}`;
+          if (!rows(vault, 'notifications').some((row) => row.kind === kind && num(row.read) !== 1)) {
+            pushNote(vault, 'Stoo ndogo', `${line.name} zimebaki ${num(line.product.stock)}.`, kind);
+          }
+        }
+      }
     }
     if (name !== 'Walk-in') {
       if (!Array.isArray(vault.customers)) vault.customers = [];
@@ -118,14 +146,15 @@ export async function checkout(req, res) {
         opened_at: when, status: 'OPEN', due_at: new Date(Date.now() + termDays * 86400000).toISOString(),
         term_days: termDays, term_unit: 'siku', last_reminded: '',
       });
+      pushNote(vault, 'Deni jipya', `${name} anadaiwa TSH ${Math.round(balance)} kwenye ${invoice}.`, `DEBT:${id}`);
     }
-    pushNote(vault, 'Mauzo mapya', `${actor(req)} · ${invoice} · ${method}`, `AUDIT:SALE:${id}`);
+    const payLabel = method === 'LIPA' ? 'Lipa Namba' : method === 'DENI' ? 'Deni' : 'Cash';
+    pushNote(vault, 'Mauzo mapya', `${invoice} ${String(priced[0]?.name || '').slice(0, 80)} · ${viewer?.name || actor(req)} · ${payLabel}.`, `SALE:${id}`);
     return '';
   }));
 }
 
 export async function addStock(req, res) {
-  if (shopTarget(req).mode === 'remote') return res.status(400).json({ error: true, message: 'Idadi inabadilika kwenye simu.' });
   const extra = Math.round(num(req.body?.qty));
   if (extra <= 0 || extra > 100000) return res.status(400).json({ error: true, message: 'Weka idadi unayoongeza.' });
   reply(res, await editVault(req, (vault) => {
@@ -237,6 +266,23 @@ export async function deleteCustomer(req, res) {
   }));
 }
 
+export async function hideDebts(req, res) {
+  const mode = String(req.body?.mode || '');
+  const id = String(req.body?.id || '');
+  reply(res, await editVault(req, (vault) => {
+    const row = rows(vault, 'meta').find((item) => item.key === 'debts_hidden');
+    const hidden = new Set(String(row?.value || '').split(',').map((part) => part.trim()).filter(Boolean));
+    if (mode === 'show') hidden.clear();
+    else if (mode === 'paid') {
+      for (const debt of rows(vault, 'debts')) if (debt.status === 'PAID') hidden.add(String(debt.id));
+    } else if (id) hidden.add(id);
+    else return 'Chagua deni.';
+    setMeta(vault, 'debts_hidden', [...hidden].sort().join(','));
+    setMeta(vault, 'debts_hidden__at', new Date().toISOString());
+    return '';
+  }));
+}
+
 export async function hidePeriod(req, res) {
   reply(res, await editVault(req, (vault) => {
     setMeta(vault, 'history_hidden_until', new Date().toISOString());
@@ -284,7 +330,7 @@ export async function takeWing(req, res) {
         pushMove(vault, line.name, -line.qty, 'MAWINGA', req);
       }
     }
-    pushNote(vault, 'Mawinga', `${actor(req)} · ${person}`, `AUDIT:WING:${id}`);
+    pushNote(vault, 'Mawinga', `${person} amechukua bidhaa. ${actor(req)}.`, `WING:${id}`);
     return '';
   }));
 }
@@ -310,7 +356,6 @@ export async function remindDebt(req, res) {
     const debt = rows(vault, 'debts').find((row) => String(row.id) === String(req.params.id));
     if (!debt || debt.status !== 'OPEN') return 'Deni halipo.';
     debt.last_reminded = new Date().toISOString();
-    pushNote(vault, 'Ukumbusho', `${actor(req)} · ${debt.customer_name}`, `AUDIT:REMIND:${debt.id}`);
     return '';
   }));
 }

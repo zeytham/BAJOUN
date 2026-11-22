@@ -37,6 +37,7 @@ import {
   deletePhone,
   exportVault,
   hidePeriod,
+  hideDebts,
   importVault,
   enterStaff,
   shopFaces,
@@ -72,6 +73,7 @@ router.post('/history/hide-period', owner, hidePeriod);
 router.post('/history/show', owner, showHistory);
 router.post('/wings', owner, takeWing);
 router.post('/faults', owner, createFault);
+router.post('/debts/hide', owner, hideDebts);
 router.post('/debts/:id/remind', owner, remindDebt);
 router.post('/notes/read-all', owner, markAllNotes);
 router.post('/notes/clear-read', owner, dropReadNotes);

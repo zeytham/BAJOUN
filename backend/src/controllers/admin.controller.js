@@ -224,6 +224,7 @@ export async function getPhoneVaultShop(req, res) {
       });
     }
 
+    const hiddenDebtIds = new Set(String((rows(vault, 'meta').find((row) => row.key === 'debts_hidden') || {}).value || '').split(',').map((part) => part.trim()).filter(Boolean));
     const debtBook = debts
       .filter((debt) => ['OPEN', 'PAID'].includes(String(debt.status)) && visibleIds.has(String(debt.sale_id)))
       .map((debt) => ({
@@ -234,7 +235,10 @@ export async function getPhoneVaultShop(req, res) {
         balance: num(debt.balance),
         status: debt.status,
         due: debt.due_at || '',
+        termDays: num(debt.term_days),
         reminded: debt.last_reminded || '',
+        invoice: (sales.find((sale) => String(sale.id) === String(debt.sale_id)) || {}).invoice || '',
+        hidden: hiddenDebtIds.has(String(debt.id)),
         at: debt.opened_at,
         payments: payments
           .filter((pay) => String(pay.debt_id) === String(debt.id))
@@ -345,12 +349,12 @@ export async function getPhoneVaultShop(req, res) {
           openDebt: openDebts.reduce((sum, debt) => sum + debt.balance, 0),
           openDebtCount: openDebts.length,
         },
-        sales: ledger.slice(0, 500),
+        sales: ledger,
         saleCount: ledger.length,
         debts: debtBook,
-        returns: returnRows.slice(0, 200),
+        returns: returnRows,
         stock,
-        units: units.filter((phone) => phone.status !== 'SOLD').slice(0, 400),
+        units: units.filter((phone) => phone.status !== 'SOLD'),
         stockValue: goodsValue + phoneValue,
         low: stock.filter((product) => product.stock <= product.reorder).length,
         customers: customers.map((customer) => ({
@@ -365,6 +369,8 @@ export async function getPhoneVaultShop(req, res) {
           phone: wing.person_phone,
           status: wing.status,
           note: wing.note || '',
+          staff: wing.staff_name || '',
+          returnedAt: wing.returned_at || '',
           at: wing.taken_at,
           items: wingItems
             .filter((item) => String(item.wing_id) === String(wing.id))
@@ -390,11 +396,9 @@ export async function getPhoneVaultShop(req, res) {
         notes: notes
           .slice()
           .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
-          .slice(0, 80)
           .map((note) => ({ id: note.id, title: note.title, body: note.body, kind: note.kind || '', read: num(note.read) === 1, at: note.created_at })),
         moves: moves
           .filter((move) => inside(move.created_at, range))
-          .slice(0, 200)
           .map((move) => ({
             id: move.id,
             name: move.name,
@@ -424,8 +428,7 @@ export async function getPhoneVaultShop(req, res) {
               left: item.warrantyDays - (Number.isNaN(elapsed) ? 0 : elapsed),
               at: sale.at,
             };
-          }))
-          .slice(0, 200),
+          })),
       },
     };
     redactShop(payload.data, viewer);
@@ -942,11 +945,20 @@ export async function returnWing(req, res) {
       }
       item.returned_qty = num(item.returned_qty) + qty;
     }
-    const still = items.some((row) => num(row.qty) > num(row.returned_qty));
-    if (!still) {
+    const when = new Date().toISOString();
+    const stillRows = items.filter((row) => num(row.qty) > num(row.returned_qty));
+    if (!stillRows.length) {
       wing.status = 'BACK';
-      wing.returned_at = new Date().toISOString();
+      wing.returned_at = when;
     }
+    const who = String(wing.person_name || '');
+    const came = chosen.map(({ item, qty }) => `${item.name} x${qty}`).join(', ');
+    const leftNames = stillRows.map((row) => `${row.name} x${num(row.qty) - num(row.returned_qty)}`).join(', ');
+    const staff = String(req.user?.name || 'Mmiliki');
+    const body = stillRows.length
+      ? `${who} amerudisha ${came}. Bado nje: ${leftNames}. ${staff}.`
+      : `${who} amerudisha ${came}. ${staff}.`;
+    pushNote(vault, 'Mawinga yamerudi', body, `WINGBACK:${wing.id}:${when}`);
     return '';
   }));
 }

@@ -776,22 +776,26 @@ class ShopStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> _saveHiddenDebts() async {
+    await db.setMeta('debts_hidden', hiddenDebts.join(','));
+    await db.bumpRevision();
+    await load();
+    syncShop();
+  }
+
   Future<void> hideDebt(String id) async {
     hiddenDebts = {...hiddenDebts, id};
-    await db.setMeta('debts_hidden', hiddenDebts.join(','));
-    notifyListeners();
+    await _saveHiddenDebts();
   }
 
   Future<void> hidePaidDebts() async {
     hiddenDebts = {...hiddenDebts, ...debts.where((row) => row['status'] == 'PAID').map((row) => '${row['id']}')};
-    await db.setMeta('debts_hidden', hiddenDebts.join(','));
-    notifyListeners();
+    await _saveHiddenDebts();
   }
 
   Future<void> showDebts() async {
     hiddenDebts = {};
-    await db.setMeta('debts_hidden', '');
-    notifyListeners();
+    await _saveHiddenDebts();
   }
 
   Future<String?> dropReturnedWing(String id) async {
@@ -1090,8 +1094,19 @@ class ShopStore extends ChangeNotifier {
     if (method == 'LIPA' && paying > 0 && lipaNumber.trim().isEmpty) {
       return CheckoutResult.error('Weka Lipa Namba kwenye mipangilio kwanza.');
     }
-    if (method == 'LIPA' && paying > 0 && lipaRef.trim().isEmpty) {
+    if (method == 'LIPA' && paying > 0 && lipaRef.trim().length < 3) {
       return CheckoutResult.error('Weka kumbukumbu ya Lipa.');
+    }
+    for (final line in cart) {
+      if (line.phoneId == null) continue;
+      Map<String, Object?>? unit;
+      for (final row in phones) {
+        if (row['id'] == line.phoneId) unit = row;
+      }
+      if (unit == null) continue;
+      final floor = asDouble(unit['floor_price']);
+      final base = floor > 0 ? floor : asDouble(unit['price']);
+      if (line.price + 0.001 < base) return CheckoutResult.error('Bei ya ${line.name} iko chini ya sakafu.');
     }
     var name = customerName.trim();
     final phone = customerPhone.replaceAll(RegExp(r'\D'), '');

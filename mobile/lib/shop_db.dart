@@ -145,7 +145,7 @@ class ShopDb {
 
   Future<void> setMeta(String key, String value) async {
     await db.insert('meta', {'key': key, 'value': value}, conflictAlgorithm: ConflictAlgorithm.replace);
-    const stamped = {'shop_name', 'shop_location', 'shop_phone', 'receipt_footer', 'lipa_namba', 'shop_logo', 'ui_lang', 'pin_recovery_hash', 'pin_recovery_salt', 'pin_recovery_fails', 'pin_recovery_until', 'gone_categories', 'gone_customers'};
+    const stamped = {'shop_name', 'shop_location', 'shop_phone', 'receipt_footer', 'lipa_namba', 'shop_logo', 'ui_lang', 'pin_recovery_hash', 'pin_recovery_salt', 'pin_recovery_fails', 'pin_recovery_until', 'gone_categories', 'gone_customers', 'debts_hidden'};
     if (!stamped.contains(key)) return;
     await db.insert(
       'meta',

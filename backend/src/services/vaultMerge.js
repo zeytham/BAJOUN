@@ -292,6 +292,17 @@ export function mergeVault(current, incoming) {
   else meta.delete('gone_categories');
   if (goneCustomers.size) meta.set('gone_customers', { key: 'gone_customers', value: [...goneCustomers].sort().join(',') });
   else meta.delete('gone_customers');
+  const leftHidden = goneIds(list(left, 'meta'), [], 'debts_hidden');
+  const rightHidden = goneIds(list(right, 'meta'), [], 'debts_hidden');
+  const leftHideAt = metaTime(left, 'debts_hidden');
+  const rightHideAt = metaTime(right, 'debts_hidden');
+  const newerHidden = rightHideAt >= leftHideAt ? rightHidden : leftHidden;
+  const cleared = newerHidden.size === 0 && Math.max(leftHideAt, rightHideAt) > 0;
+  const hiddenDebts = cleared ? [] : [...new Set([...leftHidden, ...rightHidden])].sort();
+  meta.set('debts_hidden', { key: 'debts_hidden', value: hiddenDebts.join(',') });
+  const hideAt = Math.max(leftHideAt, rightHideAt);
+  if (hideAt) meta.set('debts_hidden__at', { key: 'debts_hidden__at', value: new Date(hideAt).toISOString() });
+  settleInvoices(merged.sales);
   merged.meta = [...meta.values()];
   merged.revision = Math.max(num(left.revision), num(right.revision));
   return merged;
@@ -333,7 +344,7 @@ export function vaultStamp(snapshot) {
     .sort()
     .join('\n');
   return [
-    pick('sales', ['id', 'paid', 'balance', 'voided', 'total']),
+    pick('sales', ['id', 'invoice', 'paid', 'balance', 'voided', 'total']),
     pick('products', ['id', 'stock', 'price', 'name', 'active', 'category_id', 'fault_qty', 'warranty_days']),
     pick('phone_units', ['id', 'status', 'warranty_days']),
     pick('debts', ['id', 'balance', 'status', 'due_at', 'term_days']),
@@ -352,6 +363,7 @@ export function vaultStamp(snapshot) {
     goneStamp(snapshot, 'gone_products'),
     goneStamp(snapshot, 'gone_categories'),
     goneStamp(snapshot, 'gone_customers'),
+    goneStamp(snapshot, 'debts_hidden'),
   ].join('\n#\n');
 }
 
@@ -366,6 +378,27 @@ function metaMark(snapshot, key) {
   const row = list(snapshot, 'meta').find((item) => item.key === key);
   const value = String(row?.value || '');
   return `${value.length}:${value.slice(0, 24)}`;
+}
+
+function settleInvoices(sales) {
+  const used = new Set();
+  const ordered = [...sales].sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')) || String(a.id).localeCompare(String(b.id)));
+  for (const sale of ordered) {
+    let invoice = String(sale.invoice || '');
+    if (invoice && !used.has(invoice)) {
+      used.add(invoice);
+      continue;
+    }
+    const year = new Date(sale.created_at || Date.now()).getFullYear();
+    let n = sales.length;
+    let next = '';
+    do {
+      n += 1;
+      next = `INV-${Number.isFinite(year) ? year : new Date().getFullYear()}-${String(n).padStart(4, '0')}`;
+    } while (used.has(next));
+    sale.invoice = next;
+    used.add(next);
+  }
 }
 
 function goneStamp(snapshot, key) {

@@ -1118,6 +1118,15 @@ a { text-decoration: none; color: inherit; }
 .pv-pos { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.85fr); gap: 16px; align-items: start; }
 .pv-pos-list { max-height: 68vh; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
 .pv-hit { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 12px 14px; border-radius: 12px; background: #f7fbf6; border: 1px solid #e3f0df; text-align: left; transition: border-color .15s, transform .15s; }
+.pv-pick { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; background: #f7fbf6; border: 1px solid #e3f0df; }
+.pv-pick.on { border-color: #509541; background: #fff; box-shadow: 0 8px 18px rgba(20,48,28,0.06); }
+.pv-qty { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.pv-qty b { min-width: 1.4rem; text-align: center; }
+.pv-step { width: 32px; height: 32px; border-radius: 9px; border: 1px solid #c5e0b8; background: #fff; color: #0a2e1b; font-weight: 800; cursor: pointer; }
+.pv-step:hover:not(:disabled) { border-color: #509541; }
+.pv-step:disabled { opacity: .35; cursor: default; }
+.pv-step-add { background: #509541; color: #fff; border-color: #509541; }
+.pv-step-add:hover:not(:disabled) { background: #3d7a32; }
 .pv-hit:hover { border-color: #509541; background: #fff; transform: translateY(-2px); box-shadow: 0 10px 20px rgba(20,48,28,0.06); }
 .pv-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .pv-stock-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
