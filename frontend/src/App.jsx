@@ -126,6 +126,14 @@ export default function App() {
   return <LangCtx.Provider value={t}>{screen}</LangCtx.Provider>;
 }
 
+function BrandSeal() {
+  return (
+    <div className="pv-seal" aria-hidden="true">
+      <img src="/zeyhaan-logo.png" alt="" />
+    </div>
+  );
+}
+
 /* ══════════════════════════════════════════════════════════════════
    LOGIN / GATE
 ══════════════════════════════════════════════════════════════════ */
@@ -161,7 +169,7 @@ function Gate({ onIn }) {
       <section className="pv-stage-card">
         <aside className="pv-stage-side">
           <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-            <div className="pv-mark" style={{ width:44, height:44, fontSize:16 }}>{t('PV')}</div>
+            <BrandSeal />
             <div>
               <b style={{ fontSize:18 }}>{t('PhoneVault')}</b>
               <p style={{ marginTop:2 }}>{t('Deski ya duka')}</p>
@@ -233,7 +241,7 @@ function ShopDoor({ onPick }) {
       <section className="pv-stage-card">
         <aside className="pv-stage-side">
           <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-            <div className="pv-mark" style={{ width:44, height:44, fontSize:16 }}>{t('PV')}</div>
+            <BrandSeal />
             <div>
               <b style={{ fontSize:18 }}>{t('PhoneVault')}</b>
               <p style={{ marginTop:2 }}>{t('Deski ya duka')}</p>
@@ -333,9 +341,7 @@ function PinGate({ faces, error, lang, onLang, onIn, onSwitch, onOut }) {
         <aside className="pv-stage-side">
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
             <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-              {faces?.logo
-                ? <img alt="" src={`data:image/jpeg;base64,${faces.logo}`} style={{ width:44, height:44, borderRadius:14, objectFit:'cover', background:'#fff' }} />
-                : <div className="pv-mark" style={{ width:44, height:44 }}>{t('PV')}</div>}
+              <BrandSeal />
               <div>
                 <b style={{ fontSize:18 }}>{faces?.name || 'PhoneVault'}</b>
                 <p style={{ marginTop:2 }}>{t('Chagua akaunti, kisha weka PIN.')}</p>

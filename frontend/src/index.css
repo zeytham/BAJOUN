@@ -1180,6 +1180,19 @@ a { text-decoration: none; color: inherit; }
   gap: 28px;
   min-height: 520px;
 }
+.pv-stage-side::before {
+  content: '';
+  position: absolute;
+  width: min(86%, 360px);
+  aspect-ratio: 1;
+  left: 50%;
+  top: 58%;
+  background: url('/zeyhaan-logo.png') center / contain no-repeat;
+  opacity: 0.16;
+  pointer-events: none;
+  z-index: 0;
+  animation: pvMarkDrift 8s ease-in-out infinite;
+}
 .pv-stage-side::after {
   content: '';
   position: absolute;
@@ -1189,6 +1202,47 @@ a { text-decoration: none; color: inherit; }
   bottom: -70px;
   border-radius: 50%;
   border: 40px solid rgba(255,255,255,0.08);
+  animation: pvRing 14s linear infinite;
+}
+.pv-seal {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  position: relative;
+  flex-shrink: 0;
+  background: radial-gradient(circle at 50% 42%, rgba(255,255,255,0.96), rgba(255,255,255,0.78));
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.45), 0 14px 28px rgba(15,40,20,0.18);
+}
+.pv-seal::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: rgba(255,255,255,0.95);
+  border-right-color: rgba(255,255,255,0.28);
+  animation: pvSpin 7s linear infinite;
+}
+.pv-seal img {
+  width: 70px;
+  height: 70px;
+  object-fit: contain;
+  animation: pvBob 4.2s ease-in-out infinite;
+}
+@keyframes pvMarkDrift {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.13; }
+  50% { transform: translate(-50%, -46%) scale(1.05); opacity: 0.24; }
+}
+@keyframes pvRing { to { transform: rotate(360deg); } }
+@keyframes pvSpin { to { transform: rotate(360deg); } }
+@keyframes pvBob {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-5px) scale(1.03); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pv-stage-side::before, .pv-stage-side::after, .pv-seal::before, .pv-seal img { animation: none; }
 }
 .pv-stage-side > * { position: relative; z-index: 1; }
 .pv-stage-kicker {
