@@ -1,10 +1,10 @@
 import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { phrase } from './i18n.js';
+import { phrase, marks } from './i18n.js';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import {
   LayoutDashboard, ShoppingCart, History as HistoryIcon, Package, CreditCard,
   Users, AlertTriangle, BarChart2, PieChart as PieIcon, FileText,
-  Settings as SettingsIcon, UserCheck, Store, LogOut, Bell, Download, ChevronRight,
+  Settings as SettingsIcon, UserCheck, Store, LogOut, Bell, Download, ChevronRight, ChevronLeft,
   TrendingUp, ArrowUpRight, Search, Plus, Filter, RefreshCw,
   Shield, Eye, EyeOff, Trash2, Edit, ChevronDown, CheckCircle2,
   Smartphone, Tag, Layers, Activity, Globe, Lock, Upload, Printer,
@@ -40,7 +40,20 @@ const PAGES = GROUPS.flatMap((g) => g[1]);
 const LangCtx = createContext((t) => t);
 function useT() { return useContext(LangCtx); }
 function fill(text, ...parts) {
-  return parts.reduce((line, part, index) => line.replaceAll(`{${index}}`, String(part)), String(text ?? ''));
+  const line = parts.reduce((out, part, index) => out.replaceAll(`{${index}}`, String(part)), String(text ?? ''));
+  return marks(line);
+}
+const WORD = {
+  CASH: 'Cash', LIPA: 'Lipa', MPESA: 'Lipa', DENI: 'Deni', PART: 'Sehemu',
+  OPEN: 'Wazi', PAID: 'Yamelipwa', VOID: 'Imefutwa',
+  PHONE: 'Simu', ACCESSORY: 'Vifaa',
+  NEW: 'Mpya', 'LIKE NEW': 'Kama mpya', USED: 'Imetumika',
+  BACK: 'Amerudi', WING: 'Imeazimwa', IN_STOCK: 'Dukani', FAULTY: 'Tatizo',
+  mawinga: 'Kwa mawinga', rejareja: 'Rejareja',
+};
+function word(t, value) {
+  const key = WORD[value];
+  return key ? t(key) : value;
 }
 const FULL_PERMS = { stock:true, cost:true, history:true, debts:true, customers:true, reports:true, edit:true, analysis:true };
 const WhoCtx = createContext({ role:'OWNER', name:'', id:'', perms: FULL_PERMS });
@@ -49,13 +62,21 @@ function roleWord(role) { return role === 'OWNER' ? 'Mmiliki' : 'Muuzaji'; }
 
 /* ─────────────────────────── HELPERS ─────────────────────────── */
 function tsh(value) {
-  return `TSH ${Math.round(Number(value) || 0).toLocaleString('en-US')}`;
+  return marks(`TSH ${Math.round(Number(value) || 0).toLocaleString('en-US')}`);
 }
 function when(value) {
   if (!value) return '';
   const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleString('sw-TZ', { dateStyle: 'medium', timeStyle: 'short' });
+  if (Number.isNaN(d.getTime())) return marks(value);
+  const lang = localStorage.getItem('pv_lang') || 'sw';
+  const locale = lang === 'ar' ? 'ar-EG' : lang === 'en' ? 'en-GB' : 'sw-TZ';
+  return marks(d.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' }));
+}
+function faceDate(value) {
+  if (!value) return '';
+  const [year, month, day] = String(value).split('-');
+  if (!day) return marks(value);
+  return marks(`${day}/${month}/${year}`);
 }
 function shopHeaders() {
   const raw = sessionStorage.getItem('pv_shop');
@@ -114,6 +135,10 @@ export default function App() {
   const [lang, setLang] = useState(localStorage.getItem('pv_lang') || 'sw');
   const [shopPick, setShopPick] = useState(() => sessionStorage.getItem('pv_shop'));
   const t = (text) => phrase(lang, text);
+  useEffect(() => {
+    document.documentElement.lang = lang === 'ar' ? 'ar' : lang === 'en' ? 'en' : 'sw';
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+  }, [lang]);
   const leaveShop = () => { sessionStorage.removeItem('pv_shop'); sessionStorage.removeItem('pv_staff'); setShopPick(null); };
   const chooseLang = (next) => { localStorage.setItem('pv_lang', next); setLang(next); };
   const screen = !shopPick
@@ -668,9 +693,13 @@ function Desk({ user, lang, onLang, onOut, onSwitch }) {
                   })}
                 </div>
                 <div className="pv-range">
-                  <label className="pv-date"><span>{t('Mwanzo')}</span><input type="date" value={start} max={end || undefined} onChange={(e) => setBound('start', e.target.value)} /></label>
+                  {lang === 'ar'
+                    ? <ArabDate label="Mwanzo" value={start} max={end || ''} onChange={(value) => setBound('start', value)} />
+                    : <label className="pv-date"><span>{t('Mwanzo')}</span><input type="date" value={start} max={end || undefined} onChange={(e) => setBound('start', e.target.value)} /></label>}
                   <span style={{ color:'#7e9778', fontWeight:800 }}>–</span>
-                  <label className="pv-date"><span>{t('Mwisho')}</span><input type="date" value={end} min={start || undefined} onChange={(e) => setBound('end', e.target.value)} /></label>
+                  {lang === 'ar'
+                    ? <ArabDate label="Mwisho" value={end} min={start || ''} onChange={(value) => setBound('end', value)} />
+                    : <label className="pv-date"><span>{t('Mwisho')}</span><input type="date" value={end} min={start || undefined} onChange={(e) => setBound('end', e.target.value)} /></label>}
                 </div>
                 <button type="button" className={refreshing ? 'pv-refresh spin' : 'pv-refresh'} onClick={reloadShop} title={t('Onyesha upya')}><RefreshCw size={16} /></button>
                 <button type="button" onClick={onSwitch} className="lg:hidden" style={{ padding:'8px 12px', borderRadius:999, border:'1px solid #d7e8d4', background:'#fff', fontWeight:800, fontSize:12, cursor:'pointer' }}>{t('Duka')}</button>
@@ -736,6 +765,73 @@ function BtnDate({ label, onClick }) {
       onMouseEnter={(e) => { e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.color='var(--accent)'; }}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor='var(--border-default)'; e.currentTarget.style.color='var(--text-secondary)'; }}
     >{label}</button>
+  );
+}
+
+const AR_MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+const AR_WEEK = ['سبت', 'أحد', 'إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة'];
+
+function ArabDate({ label, value, min, max, onChange }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const box = useRef(null);
+  const seed = value ? new Date(`${value}T12:00:00`) : new Date();
+  const [view, setView] = useState(() => new Date(seed.getFullYear(), seed.getMonth(), 1));
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (event) => {
+      if (box.current && !box.current.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+  const year = view.getFullYear();
+  const month = view.getMonth();
+  const offset = (new Date(year, month, 1).getDay() + 1) % 7;
+  const days = Array.from({ length: 42 }, (_, i) => new Date(year, month, 1 - offset + i));
+  const choose = (day) => {
+    const iso = dayInput(day);
+    if (min && iso < min) return;
+    if (max && iso > max) return;
+    onChange(iso);
+    setOpen(false);
+  };
+  return (
+    <div className="pv-arab-date" ref={box}>
+      <button type="button" className="pv-date ar" onClick={() => setOpen((shown) => !shown)}>
+        <span>{t(label)}</span>
+        <strong>{faceDate(value)}</strong>
+      </button>
+      {open && (
+        <div className="pv-cal" role="dialog">
+          <div className="pv-cal-head">
+            <button type="button" aria-label="previous" onClick={() => setView(new Date(year, month - 1, 1))}><ChevronRight size={16} /></button>
+            <strong>{AR_MONTHS[month]} {marks(year)}</strong>
+            <button type="button" aria-label="next" onClick={() => setView(new Date(year, month + 1, 1))}><ChevronLeft size={16} /></button>
+          </div>
+          <div className="pv-cal-grid">
+            {AR_WEEK.map((name) => <span key={name}>{name}</span>)}
+            {days.map((day) => {
+              const iso = dayInput(day);
+              const outside = day.getMonth() !== month;
+              const blocked = Boolean((min && iso < min) || (max && iso > max));
+              return (
+                <button
+                  key={`${iso}-${outside ? 'out' : 'in'}`}
+                  type="button"
+                  disabled={blocked}
+                  className={iso === value ? 'on' : ''}
+                  style={{ opacity: outside ? 0.35 : 1 }}
+                  onClick={() => choose(day)}
+                >
+                  {marks(day.getDate())}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -858,6 +954,24 @@ function Home({ shop, onOpen }) {
         })}
       </div>
 
+      {(() => {
+        const sat = (shop.units || []).filter((row) => {
+          if (row.status !== 'IN_STOCK' || !row.arrived) return false;
+          const at = new Date(row.arrived);
+          if (Number.isNaN(at.getTime())) return false;
+          return (Date.now() - at.getTime()) / 86400000 >= 60;
+        });
+        if (!sat.length) return null;
+        return (
+          <article className="pv-panel" style={{ borderColor:'rgba(180,83,9,0.25)', background:'#fff8ef' }}>
+            <p style={{ fontWeight:800, color:'var(--warning)' }}>{t('Simu zimekaa')}</p>
+            {sat.map((row) => (
+              <p key={row.id} style={{ marginTop:6 }}>{row.name} · {fill(t('siku {0}'), Math.floor((Date.now() - new Date(row.arrived).getTime()) / 86400000))}</p>
+            ))}
+          </article>
+        );
+      })()}
+
       <article className="pv-panel">
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:8 }}>
           <p style={{ fontWeight:800 }}>{t('Mauzo kwa siku')}</p>
@@ -873,10 +987,10 @@ function Home({ shop, onOpen }) {
                 </linearGradient>
               </defs>
               <CartesianGrid stroke="#e3f0df" vertical={false} />
-              <XAxis dataKey="day" tick={{ fontSize:11, fill:'#64748b' }} />
-              <YAxis tick={{ fontSize:11, fill:'#64748b' }} width={64} />
+              <XAxis dataKey="day" tick={{ fontSize:11, fill:'#64748b' }} tickFormatter={marks} />
+              <YAxis tick={{ fontSize:11, fill:'#64748b' }} width={64} tickFormatter={marks} />
               <Tooltip formatter={(v) => tsh(v)} contentStyle={CHART_TIP} />
-              <Area type="monotone" dataKey="total" name="Mauzo" stroke="#509541" fill="url(#saleFill)" strokeWidth={2.5} />
+              <Area type="monotone" dataKey="total" name={t('Mauzo')} stroke="#509541" fill="url(#saleFill)" strokeWidth={2.5} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -906,10 +1020,10 @@ function Home({ shop, onOpen }) {
           <p style={{ fontWeight:800, marginBottom:4 }}>{t('Faida')}</p>
           <div className="pv-chart">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={profitBars}>
+              <BarChart data={profitBars.map((row) => ({ ...row, name: t(row.name) }))}>
                 <CartesianGrid stroke="#e3f0df" vertical={false} />
                 <XAxis dataKey="name" tick={{ fontSize:12, fill:'#64748b' }} />
-                <YAxis tick={{ fontSize:11, fill:'#64748b' }} width={64} />
+                <YAxis tick={{ fontSize:11, fill:'#64748b' }} width={64} tickFormatter={marks} />
                 <Tooltip formatter={(v) => tsh(v)} contentStyle={CHART_TIP} />
                 <Bar dataKey="value" radius={[8,8,0,0]}>
                   {profitBars.map((row) => <Cell key={row.name} fill={row.value < 0 ? '#b45309' : '#509541'} />)}
@@ -1093,22 +1207,22 @@ function Till({ shop, carry, onCarry, onSaved, faulty = false }) {
           <span style={{ fontSize:12, color:'var(--text-secondary)', fontWeight:700 }}>{fill(t('{0} vinapatikana'), units.length + goods.length)}</span>
         </div>
         <div style={{ position:'relative', marginBottom:12 }}>
-          <Search size={15} style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)', pointerEvents:'none' }} />
+          <Search size={15} style={{ position:'absolute', insetInlineStart:12, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)', pointerEvents:'none' }} />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={takeTyped}
-            style={{ width:'100%', paddingLeft:38, background:'#fff', border:'1px solid var(--border-default)', borderRadius:10, color:'var(--text-primary)', height:42, outline:'none', fontSize:14 }}
+            style={{ width:'100%', paddingInlineStart:38, background:'#fff', border:'1px solid var(--border-default)', borderRadius:10, color:'var(--text-primary)', height:42, outline:'none', fontSize:14 }}
           />
         </div>
         <div className="pv-chips" style={{ marginBottom:12 }}>
           <KindTab active={cat===''} onClick={() => setCat('')}>{t('Zote')}</KindTab>
           <KindTab active={cat==='phones'} onClick={() => setCat('phones')}>{t('Simu')}</KindTab>
           {phoneCats.filter((row) => row.id !== 'phones').map((row) => (
-            <KindTab key={row.id} active={cat===row.id} secondary onClick={() => setCat(row.id)}>{row.name}</KindTab>
+            <KindTab key={row.id} active={cat===row.id} secondary onClick={() => setCat(row.id)}>{t(row.name)}</KindTab>
           ))}
           {goodsCats.map((row) => (
-            <KindTab key={row.id} active={cat===row.id} secondary onClick={() => setCat(row.id)}>{row.name}</KindTab>
+            <KindTab key={row.id} active={cat===row.id} secondary onClick={() => setCat(row.id)}>{t(row.name)}</KindTab>
           ))}
         </div>
         <div className="pv-pos-list">
@@ -1121,7 +1235,7 @@ function Till({ shop, carry, onCarry, onSaved, faulty = false }) {
             >
               <div>
                 <p style={{ fontWeight:700, fontSize:14, color:'var(--text-primary)' }}>{it.name}</p>
-                <p style={{ fontSize:12, color:'var(--text-secondary)', marginTop:2 }}>{it.imei} · {fill(t('Sakafu {0}'), tsh(it.floor || it.price))}</p>
+                <p style={{ fontSize:12, color:'var(--text-secondary)', marginTop:2 }}>{marks(it.imei)} · {fill(t('Sakafu {0}'), tsh(it.floor || it.price))}</p>
               </div>
               <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                 <span style={{ background:'rgba(128,192,80,0.1)', borderRadius:6, padding:'2px 8px', fontSize:11, fontWeight:700, color:'var(--accent)' }}>{t('IMEI')}</span>
@@ -1138,7 +1252,7 @@ function Till({ shop, carry, onCarry, onSaved, faulty = false }) {
             >
               <div>
                 <p style={{ fontWeight:700, fontSize:14, color:'var(--text-primary)' }}>{it.name}</p>
-                <p style={{ fontSize:12, color:'var(--text-secondary)', marginTop:2 }}>{it.barcode || t('Bila msimbo')} · {fill(t('Stoo {0}'), it.stock)}</p>
+                <p style={{ fontSize:12, color:'var(--text-secondary)', marginTop:2 }}>{marks(it.barcode) || t('Bila msimbo')} · {fill(t('Stoo {0}'), it.stock)}</p>
               </div>
               <span style={{ fontWeight:700, fontSize:14, color:'var(--text-primary)' }}>{tsh(it.price)}</span>
             </button>
@@ -1153,7 +1267,7 @@ function Till({ shop, carry, onCarry, onSaved, faulty = false }) {
       <form onSubmit={sell} className="pv-panel" style={{ display:'flex', flexDirection:'column', gap:14, position:'sticky', top:84 }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:4 }}>
           <p style={{ fontWeight:700, fontSize:15 }}>{t('Kasha la Uuzaji')}</p>
-          {cart.length > 0 && <span style={{ background:'rgba(128,192,80,0.12)', color:'var(--accent)', borderRadius:999, padding:'2px 10px', fontSize:12, fontWeight:700 }}>{cart.length}</span>}
+          {cart.length > 0 && <span style={{ background:'rgba(128,192,80,0.12)', color:'var(--accent)', borderRadius:999, padding:'2px 10px', fontSize:12, fontWeight:700 }}>{marks(cart.length)}</span>}
         </div>
 
         {/* Cart items */}
@@ -1172,7 +1286,7 @@ function Till({ shop, carry, onCarry, onSaved, faulty = false }) {
               {!line.phoneId && (
                 <>
                   <button type="button" onClick={() => setCart(cart.map((r,i) => i===idx ? {...r,qty:Math.max(1,r.qty-1)}:r))} style={{ width:26, height:26, borderRadius:6, background:'#fff', border:'1px solid var(--border-default)', color:'var(--text-primary)', fontWeight:700, cursor:'pointer' }}>−</button>
-                  <span style={{ minWidth:16, textAlign:'center', fontWeight:800 }}>{line.qty}</span>
+                  <span style={{ minWidth:16, textAlign:'center', fontWeight:800 }}>{marks(line.qty)}</span>
                   <button type="button" onClick={() => setCart(cart.map((r,i) => i===idx ? {...r,qty:r.qty+1}:r))} style={{ width:26, height:26, borderRadius:6, background:'rgba(128,192,80,0.12)', border:'none', color:'var(--accent)', fontWeight:700, cursor:'pointer', fontSize:14, display:'grid', placeItems:'center' }}>+</button>
                 </>
               )}
@@ -1203,7 +1317,7 @@ function Till({ shop, carry, onCarry, onSaved, faulty = false }) {
         {method === 'PART' && (
           <div style={{ display:'flex', gap:6 }}>
             {['CASH','LIPA'].map((it) => (
-              <button key={it} type="button" onClick={() => setPart(it)} style={{ padding:'6px 14px', borderRadius:8, background: part===it?'var(--accent-dim)':'var(--bg-elevated)', color: part===it?'var(--accent)':'var(--text-secondary)', border:`1px solid ${part===it?'rgba(128,192,80,0.3)':'var(--border-default)'}`, fontWeight:700, fontSize:13, cursor:'pointer' }}>{it}</button>
+              <button key={it} type="button" onClick={() => setPart(it)} style={{ padding:'6px 14px', borderRadius:8, background: part===it?'var(--accent-dim)':'var(--bg-elevated)', color: part===it?'var(--accent)':'var(--text-secondary)', border:`1px solid ${part===it?'rgba(128,192,80,0.3)':'var(--border-default)'}`, fontWeight:700, fontSize:13, cursor:'pointer' }}>{word(t, it)}</button>
             ))}
           </div>
         )}
@@ -1222,7 +1336,7 @@ function Till({ shop, carry, onCarry, onSaved, faulty = false }) {
           {[['Jumla', tsh(total)], ['Chenji', tsh(change)], ['Deni', tsh(debt)], ['Lipa', shop.shop.lipa || '—']].map(([k, v]) => (
             <div key={k} style={{ display:'flex', flexDirection:'column' }}>
               <span style={{ fontSize:10, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.08em' }}>{t(k)}</span>
-              <span style={{ fontWeight:700, fontSize:14, color: k==='Deni'&&debt>0?'var(--warning)':'var(--text-primary)', marginTop:2 }}>{v}</span>
+              <span style={{ fontWeight:700, fontSize:14, color: k==='Deni'&&debt>0?'var(--warning)':'var(--text-primary)', marginTop:2 }}>{marks(v)}</span>
             </div>
           ))}
         </div>
@@ -1243,12 +1357,12 @@ function Till({ shop, carry, onCarry, onSaved, faulty = false }) {
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
               <p style={{ fontWeight:700, color:'var(--accent)' }}>{receipt.customer} · {receipt.method}</p>
               <button type="button" onClick={() => window.print()} style={{ display:'flex', alignItems:'center', gap:6, background:'rgba(128,192,80,0.1)', border:'1px solid rgba(128,192,80,0.25)', borderRadius:6, padding:'4px 10px', fontSize:12, fontWeight:700, color:'var(--accent)', cursor:'pointer' }}>
-                <Printer size={12} />Chapisha
+                <Printer size={12} />{t('Chapisha')}
               </button>
             </div>
             {receipt.lines.map((l) => <p key={l.name} style={{ color:'var(--text-secondary)', marginBottom:3 }}>{l.qty} {l.name} · {tsh(l.price*l.qty)}</p>)}
             <p style={{ marginTop:8, fontWeight:600, color:'var(--text-primary)' }}>
-              Jumla {tsh(receipt.total)} · amelipa {tsh(receipt.paid)}{receipt.change>0?` · chenji ${tsh(receipt.change)}`:''}{receipt.debt>0?` · deni ${tsh(receipt.debt)}`:''}
+              {t('Jumla')} {tsh(receipt.total)} · {t('Amelipa')} {tsh(receipt.paid)}{receipt.change>0?` · ${t('chenji')} ${tsh(receipt.change)}`:''}{receipt.debt>0?` · ${t('deni')} ${tsh(receipt.debt)}`:''}
             </p>
             {receipt.method === 'LIPA' && <p style={{ color:'var(--text-secondary)', fontSize:12, marginTop:4 }}>Lipa {shop.shop.lipa} · {receipt.lipaRef}</p>}
           </article>
@@ -1298,7 +1412,7 @@ function History({ sales, total, hidden, hiddenUntil, query, setQuery, openId, s
         {[['Risiti', `${visible.length} / ${total}`], ['Jumla', tsh(billed)], ['Yamelipwa', tsh(paid)], ['Deni', tsh(owing)]].map(([k, v]) => (
           <article key={k} className="pv-panel" style={{ padding:'12px 14px' }}>
             <p style={{ fontSize:11, fontWeight:800, letterSpacing:'0.08em', textTransform:'uppercase', color:'var(--text-secondary)' }}>{t(k)}</p>
-            <p style={{ fontSize:18, fontWeight:800, marginTop:4 }}>{v}</p>
+            <p style={{ fontSize:18, fontWeight:800, marginTop:4 }}>{marks(v)}</p>
           </article>
         ))}
       </div>
@@ -1307,16 +1421,16 @@ function History({ sales, total, hidden, hiddenUntil, query, setQuery, openId, s
           <KindTab key={label} active={pay === id} onClick={() => setPay(id)}>{t(label)}</KindTab>
         ))}
         {returns?.length > 0 && <span style={{ background:'rgba(180,83,9,0.1)', color:'var(--warning)', borderRadius:999, padding:'6px 12px', fontSize:12, fontWeight:700, alignSelf:'center' }}>
-          Marejesho {returns.length} · {tsh(returns.reduce((s, r) => s + r.refund, 0))}
+          {t('Marejesho')} {returns.length} · {tsh(returns.reduce((s, r) => s + r.refund, 0))}
         </span>}
       </div>
       <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
           <SearchBox value={query} onChange={setQuery} placeholder={t('Tafuta risiti, mteja, au IMEI')} />
           <BtnSecondary onClick={() => setShowHidden((v) => !v)} icon={showHidden ? EyeOff : Eye}>
-            {showHidden ? 'Ficha zilizofichwa' : 'Zilizofichwa'}
+            {showHidden ? t('Ficha zilizofichwa') : t('Zilizofichwa')}
           </BtnSecondary>
           <BtnSecondary onClick={() => act('/api/admin/history/hide-period','Historia ya sasa imefichwa.')} icon={EyeOff}>
-            Ficha kipindi
+            {t('Ficha kipindi')}
           </BtnSecondary>
           {hiddenUntil && <BtnSecondary onClick={() => act('/api/admin/history/show','Historia imeonekana.')} icon={Eye}>{t('Onyesha zote')}</BtnSecondary>}
           <Pakua kind="mauzo" start={start} end={end} />
@@ -1330,12 +1444,12 @@ function History({ sales, total, hidden, hiddenUntil, query, setQuery, openId, s
           <div style={{ display:'flex', justifyContent:'space-between', marginBottom:10 }}>
             <span style={{ fontWeight:700, fontSize:15 }}>{paper.invoice}</span>
             <button type="button" onClick={() => window.print()} style={{ display:'flex', alignItems:'center', gap:6, background:'rgba(128,192,80,0.1)', border:'1px solid rgba(128,192,80,0.2)', borderRadius:6, padding:'5px 12px', color:'var(--accent)', fontWeight:700, fontSize:12, cursor:'pointer' }}>
-              <Printer size={12} />Chapisha
+              <Printer size={12} />{t('Chapisha')}
             </button>
           </div>
-          <p style={{ color:'var(--text-secondary)', marginBottom:8 }}>{paper.customer||'Kaunta'} · {paper.phone} · {paper.method}{paper.lipaRef?` · ${paper.lipaRef}`:''}</p>
+          <p style={{ color:'var(--text-secondary)', marginBottom:8 }}>{paper.customer||t('Kaunta')} · {paper.phone} · {word(t, paper.method)}{paper.lipaRef?` · ${paper.lipaRef}`:''}</p>
           {(paper.items||[]).map((it) => <p key={it.id} style={{ marginBottom:4, color:'var(--text-primary)' }}>{it.qty} {it.name}{it.imei?` ${it.imei}`:''} · {tsh(it.total)}</p>)}
-          <p style={{ marginTop:10, fontWeight:600 }}>Jumla {tsh(paper.total)} · amelipa {tsh(paper.paid)}{paper.change>0?` · chenji ${tsh(paper.change)}`:''}{paper.balance>0?` · deni ${tsh(paper.balance)}`:''}</p>
+          <p style={{ marginTop:10, fontWeight:600 }}>{t('Jumla')} {tsh(paper.total)} · {t('Amelipa')} {tsh(paper.paid)}{paper.change>0?` · ${t('chenji')} ${tsh(paper.change)}`:''}{paper.balance>0?` · ${t('deni')} ${tsh(paper.balance)}`:''}</p>
         </article>
       )}
 
@@ -1369,7 +1483,7 @@ function History({ sales, total, hidden, hiddenUntil, query, setQuery, openId, s
           <p style={{ fontWeight:700, fontSize:15 }}>Rudisha bidhaa · {back.invoice}</p>
           {back.items.map((it, idx) => (
             <div key={it.id} style={{ display:'grid', gridTemplateColumns:'1fr 5rem auto', gap:10, alignItems:'center' }}>
-              <span style={{ fontSize:13, color:'var(--text-secondary)' }}>{it.name} · baki {it.left}</span>
+              <span style={{ fontSize:13, color:'var(--text-secondary)' }}>{it.name} · {fill(t('baki {0}'), it.left)}</span>
               <input value={it.qty} onChange={(e) => { const items=back.items.slice(); items[idx]={...it,qty:e.target.value}; setBack({...back,items}); }} style={inputSx} />
               <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, fontWeight:600, cursor:'pointer' }}>
                 <input type="checkbox" checked={it.faulty} onChange={(e) => { const items=back.items.slice(); items[idx]={...it,faulty:e.target.checked}; setBack({...back,items}); }} />
@@ -1389,13 +1503,13 @@ function History({ sales, total, hidden, hiddenUntil, query, setQuery, openId, s
           id: sale.id,
           cells: [
             sale.invoice,
-            sale.customer || 'Kaunta',
-            <span key="method" style={{ display:'inline-flex', alignItems:'center', gap:4, background:'rgba(15,23,42,0.05)', borderRadius:6, padding:'2px 8px', fontSize:12, fontWeight:700, color:'var(--text-secondary)' }}>{sale.method}</span>,
+            sale.customer || t('Kaunta'),
+            <span key="method" style={{ display:'inline-flex', alignItems:'center', gap:4, background:'rgba(15,23,42,0.05)', borderRadius:6, padding:'2px 8px', fontSize:12, fontWeight:700, color:'var(--text-secondary)' }}>{word(t, sale.method)}</span>,
             <span key="total" style={{ fontWeight:700, color:'var(--text-primary)' }}>{tsh(sale.total)}</span>,
           ],
           open: openId === sale.id,
-          detail: (sale.items||[]).map((it) => `${it.qty} ${it.name}${it.imei?` · ${it.imei}`:''} · ${tsh(it.total)}${it.back?` · imerudi ${it.back}`:''}`).concat([
-            `Amelipa ${tsh(sale.paid)}${sale.change>0?` · chenji ${tsh(sale.change)}`:''}${sale.balance>0?` · deni ${tsh(sale.balance)}`:''}`,
+          detail: (sale.items||[]).map((it) => `${it.qty} ${it.name}${it.imei?` · ${it.imei}`:''} · ${tsh(it.total)}${it.back?` · ${fill(t('imerudi {0}'), it.back)}`:''}`).concat([
+            `${t('Amelipa')} ${tsh(sale.paid)}${sale.change>0?` · ${t('chenji')} ${tsh(sale.change)}`:''}${sale.balance>0?` · ${t('deni')} ${tsh(sale.balance)}`:''}`,
             when(sale.at),
           ]),
           tools: (
@@ -1404,7 +1518,7 @@ function History({ sales, total, hidden, hiddenUntil, query, setQuery, openId, s
               <BtnGhost onClick={() => setForm({id:sale.id,customer:sale.customer||'',phone:sale.phone||''})} icon={Edit}>{t('Hariri mteja')}</BtnGhost>
               <BtnGhost onClick={() => setBack({id:sale.id,invoice:sale.invoice,reason:'',items:(sale.items||[]).filter((it)=>it.qty-it.back>0).map((it)=>({id:it.id,name:it.name,left:it.qty-it.back,qty:'',faulty:false}))})} icon={RotateCcw}>{t('Rudisha')}</BtnGhost>
               <BtnSecondary onClick={() => act(`/api/admin/sales/${sale.id}/hide`, hiddenSet.has(sale.id)?'Risiti imeonekana.':'Risiti imefichwa.')} icon={hiddenSet.has(sale.id)?Eye:EyeOff}>
-                {hiddenSet.has(sale.id) ? 'Onyesha' : 'Ficha'}
+                {hiddenSet.has(sale.id) ? t('Onyesha') : t('Ficha')}
               </BtnSecondary>
               <BtnDanger onClick={() => { setError(''); setAsk({id:sale.id,invoice:sale.invoice}); }} icon={Trash2}>{t('Futa')}</BtnDanger>
             </div>
@@ -1490,10 +1604,10 @@ function Stock({ shop, query, setQuery, onSaved, start, end }) {
     <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
       {remote && <Info variant="info">{t('Duka limeunganishwa. Bei na taarifa zinabadilika hapa. Idadi inabadilika kwenye simu.')}</Info>}
       <div className="pv-stats">
-        {[['Bidhaa', String(rows.length)], ['Thamani', tsh(worth)], ['Chini ya kiwango', String(lowCount)], ['Aina', kind === 'phones' ? 'Simu' : 'Vifaa']].map(([k, v]) => (
+        {[['Bidhaa', String(rows.length)], ['Thamani', tsh(worth)], ['Chini ya kiwango', String(lowCount)], ['Aina', kind === 'phones' ? t('Simu') : t('Vifaa')]].map(([k, v]) => (
           <article key={k} className="pv-panel" style={{ padding:'12px 14px' }}>
             <p style={{ fontSize:11, fontWeight:800, letterSpacing:'0.08em', textTransform:'uppercase', color:'var(--text-secondary)' }}>{t(k)}</p>
-            <p style={{ fontSize:18, fontWeight:800, marginTop:4 }}>{v}</p>
+            <p style={{ fontSize:18, fontWeight:800, marginTop:4 }}>{marks(v)}</p>
           </article>
         ))}
       </div>
@@ -1507,20 +1621,20 @@ function Stock({ shop, query, setQuery, onSaved, start, end }) {
         ))}
         {groups.map((r) => (
           <KindTab key={r.id} active={group===r.id} secondary onClick={() => { setGroup(group===r.id?'':r.id); setGroupName(r.name); }}>
-            {r.name}
+            {t(r.name)}
           </KindTab>
         ))}
       </div>
 
       {canEdit && <form onSubmit={saveGroup} style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
         <div style={{ position:'relative' }}>
-          <Tag size={13} style={{ position:'absolute', left:11, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)', pointerEvents:'none' }} />
-          <input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder={group?t('Jina jipya la kundi'):t('Kundi jipya')} style={{ ...inputSx, paddingLeft:34, minWidth:200 }} />
+          <Tag size={13} style={{ position:'absolute', insetInlineStart:11, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)', pointerEvents:'none' }} />
+          <input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder={group?t('Jina jipya la kundi'):t('Kundi jipya')} style={{ ...inputSx, paddingInlineStart:34, minWidth:200 }} />
         </div>
         <BtnGhost type="submit" icon={group ? Edit : Plus}>{group ? t('Badili jina') : t('Ongeza kundi')}</BtnGhost>
         {group && (
           <BtnDanger type="button" onClick={async () => { try { await api(`/api/admin/categories/${group}`,null,'DELETE'); setGroup(''); onSaved('Kundi limeondolewa.'); } catch(err){setError(err.message);} }} icon={Trash2}>
-            Futa kundi
+            {t('Futa kundi')}
           </BtnDanger>
         )}
       </form>}
@@ -1556,7 +1670,7 @@ function Stock({ shop, query, setQuery, onSaved, start, end }) {
           {kind==='goods'&&adding!=='phone' && field('barcode','Barcode')}
           <select value={edit.categoryId||''} onChange={(e) => setEdit({...edit,categoryId:e.target.value})} style={selectSx}>
             <option value="">{t('Kundi')}</option>
-            {groups.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+            {groups.map((r) => <option key={r.id} value={r.id}>{t(r.name)}</option>)}
           </select>
           {(adding==='phone'||adding==='unit'||(kind==='phones'&&!adding)) && (
             <select value={edit.condition||'NEW'} onChange={(e) => setEdit({...edit,condition:e.target.value})} style={selectSx}>
@@ -1592,13 +1706,13 @@ function Stock({ shop, query, setQuery, onSaved, start, end }) {
         <article style={{ background:'var(--bg-card)', border:'1px solid var(--border-subtle)', borderRadius:14, padding:20 }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:16 }}>
             <p style={{ fontWeight:800, fontSize:18 }}>{picked.name}</p>
-            <span style={{ background:'rgba(128,192,80,0.1)', color:'var(--accent)', borderRadius:8, padding:'4px 12px', fontSize:12, fontWeight:700 }}>{picked.type}</span>
+            <span style={{ background:'rgba(128,192,80,0.1)', color:'var(--accent)', borderRadius:8, padding:'4px 12px', fontSize:12, fontWeight:700 }}>{word(t, picked.type)}</span>
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))', gap:'10px 20px' }}>
-            {[['Bei',tsh(picked.price)], seeCost && ['Gharama',tsh(picked.cost)],['Idadi',picked.stock],['Storage',picked.storage||'—'],['RAM',picked.ram||'—'],['Skrini',picked.screen||'—'],['Hali',picked.condition||'—'],['Warranty',`${picked.warrantyDays||0} siku`],['Barcode',picked.barcode||'—'],['Matatizo',picked.fault||0]].filter(Boolean).map(([k,v]) => (
+            {[['Bei',tsh(picked.price)], seeCost && ['Gharama',tsh(picked.cost)],['Idadi',picked.stock],['Storage',picked.storage||'—'],['RAM',picked.ram||'—'],['Skrini',picked.screen||'—'],['Hali', word(t, picked.condition) || '—'],['Warranty', `${picked.warrantyDays||0} ${t('Siku')}`],['Barcode',picked.barcode||'—'],['Matatizo',picked.fault||0]].filter(Boolean).map(([k,v]) => (
               <div key={k}>
                 <p style={{ fontSize:11, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:3 }}>{t(k)}</p>
-                <p style={{ fontSize:14, fontWeight:600, color:'var(--text-primary)' }}>{v}</p>
+                <p style={{ fontSize:14, fontWeight:600, color:'var(--text-primary)' }}>{marks(v)}</p>
               </div>
             ))}
           </div>
@@ -1610,7 +1724,7 @@ function Stock({ shop, query, setQuery, onSaved, start, end }) {
               </form>
             )}
             <BtnDanger type="button" onClick={async () => { try { await api(`/api/admin/products/${picked.id}/retire`,{},'POST'); setPicked(null); onSaved('Bidhaa imestaafu.'); } catch(err){setError(err.message);} }} icon={X}>
-              Staafu
+              {t('Staafu')}
             </BtnDanger>
           </div>
           {error && <Warn style={{ marginTop:10 }}>{error}</Warn>}
@@ -1624,15 +1738,15 @@ function Stock({ shop, query, setQuery, onSaved, start, end }) {
             <button key={it.id} type="button" className="pv-phone-card" onClick={() => { setPicked(it); setAdding(''); setEdit({ ...blankProduct(), ...it, stock:String((it.stock||0)+(it.fault||0)), fault:String(it.fault||0), price:String(it.price), cost:String(it.cost), reorder:String(it.reorder), ...splitWarranty(it.warrantyDays) }); }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                 <span style={{ width:34, height:34, borderRadius:10, background:'#fff', border:'1px solid #d7e8d4', display:'grid', placeItems:'center' }}><Smartphone size={16} color="#509541" /></span>
-                <span style={{ fontSize:11, fontWeight:800, color:'#509541' }}>{it.condition || 'SIMU'}</span>
+                <span style={{ fontSize:11, fontWeight:800, color:'#509541' }}>{word(t, it.condition) || t('Simu')}</span>
               </div>
               <p style={{ fontWeight:800, fontSize:16 }}>{it.name}</p>
               <div className="pv-spec">
-                {[it.storage, it.ram, it.color, it.screen].filter(Boolean).map((bit) => <span key={bit}>{bit}</span>)}
+                {[it.storage, it.ram, it.color, it.screen].filter(Boolean).map((bit) => <span key={bit}>{marks(bit)}</span>)}
               </div>
               <div style={{ marginTop:'auto', display:'flex', justifyContent:'space-between', alignItems:'end' }}>
                 <b>{tsh(it.price)}</b>
-                <span style={{ fontSize:12, fontWeight:800, color: it.stock <= it.reorder ? 'var(--warning)' : '#1f5c28' }}>{it.stock} stoo{it.fault ? ` · ${it.fault} tatizo` : ''}</span>
+                <span style={{ fontSize:12, fontWeight:800, color: it.stock <= it.reorder ? 'var(--warning)' : '#1f5c28' }}>{marks(it.stock)} {t('Stoo')}{it.fault ? `  ${marks(it.fault)} ${t('Tatizo')}` : ''}</span>
               </div>
             </button>
           ))}
@@ -1648,7 +1762,7 @@ function Stock({ shop, query, setQuery, onSaved, start, end }) {
             <p style={{ fontSize:12, color:'var(--text-secondary)' }}>{[it.storage, it.ram, it.color, it.barcode].filter(Boolean).join(' · ') || it.type}</p>
             <div style={{ display:'flex', justifyContent:'space-between', marginTop:4 }}>
               <b>{tsh(it.price)}</b>
-              <span style={{ fontWeight:800, color:'#509541' }}>{it.stock} stoo</span>
+              <span style={{ fontWeight:800, color:'#509541' }}>{marks(it.stock)} {t('Stoo')}</span>
             </div>
           </button>
         ))}
@@ -1659,22 +1773,22 @@ function Stock({ shop, query, setQuery, onSaved, start, end }) {
       {/* Phone units */}
       {kind==='phones' && shop.units.length>0 && (
         <div>
-          <SectionHeader title="Simu za IMEI" icon={Smartphone} />
+          <SectionHeader title={t('Simu za IMEI')} icon={Smartphone} />
           <div className="pv-phone-grid">
             {shop.units.map((ph) => (
               <button key={ph.id} type="button" className="pv-phone-card" onClick={() => { setAdding('unit'); setEdit({ ...blankProduct(), ...ph, price:String(ph.price), cost:String(ph.cost), floor:String(ph.floor||ph.price), faulty:ph.status==='FAULTY', ...splitWarranty(ph.warrantyDays) }); }}>
                 <div style={{ display:'flex', justifyContent:'space-between' }}>
                   <span style={{ fontSize:11, fontWeight:800, letterSpacing:'0.08em', color:'#64748b' }}>{t('IMEI')}</span>
-                  <span style={{ fontSize:11, fontWeight:800, color: ph.status==='FAULTY' ? 'var(--danger)' : '#509541' }}>{ph.status==='FAULTY' ? 'Tatizo' : 'Stoo'}</span>
+                  <span style={{ fontSize:11, fontWeight:800, color: ph.status==='FAULTY' ? 'var(--danger)' : '#509541' }}>{ph.status==='FAULTY' ? t('Tatizo') : t('Stoo')}</span>
                 </div>
                 <p style={{ fontWeight:800, fontSize:16 }}>{ph.name}</p>
-                <p style={{ fontFamily:'ui-monospace, monospace', fontSize:13, letterSpacing:'0.04em' }}>{ph.imei}</p>
+                <p style={{ fontFamily:'ui-monospace, monospace', fontSize:13, letterSpacing:'0.04em' }}>{marks(ph.imei)}</p>
                 <div className="pv-spec">
-                  {[ph.storage, ph.ram, ph.color, ph.condition].filter(Boolean).map((bit) => <span key={bit}>{bit}</span>)}
+                  {[ph.storage, ph.ram, ph.color, word(t, ph.condition) || ph.condition].filter(Boolean).map((bit) => <span key={bit}>{marks(bit)}</span>)}
                 </div>
                 <div style={{ marginTop:'auto', display:'flex', justifyContent:'space-between' }}>
                   <b>{tsh(ph.price)}</b>
-                  <span style={{ fontSize:12, color:'var(--text-secondary)' }}>{ph.warrantyDays || 0} siku</span>
+                  <span style={{ fontSize:12, color:'var(--text-secondary)' }}>{marks(ph.warrantyDays || 0)} {t('Siku')}</span>
                 </div>
               </button>
             ))}
@@ -1685,7 +1799,7 @@ function Stock({ shop, query, setQuery, onSaved, start, end }) {
       {/* Delete IMEI */}
       {adding==='unit'&&edit && (
         <BtnDanger type="button" onClick={async () => { try { await api(`/api/admin/phones/${edit.id}`,null,'DELETE'); setEdit(null); setAdding(''); onSaved('IMEI imefutwa.'); } catch(err){setError(err.message);} }} icon={Trash2}>
-          Futa IMEI
+          {t('Futa IMEI')}
         </BtnDanger>
       )}
     </div>
@@ -1699,12 +1813,33 @@ function Debts({ shop, query, setQuery, onSaved }) {
   const t = useT();
   const [pay, setPay] = useState(null);
   const [tab, setTab] = useState('OPEN');
+  const [age, setAge] = useState('all');
   const [error, setError] = useState('');
   const needle = query.trim().toLowerCase();
   const [order, setOrder] = useState('big');
   const visibleDebt = (d) => d.status !== 'PAID' || !d.hidden;
+  function lateDays(debt) {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const due = debt.due ? new Date(debt.due) : null;
+    if (due && !Number.isNaN(due.getTime())) {
+      const start = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+      return Math.max(0, Math.round((today - start) / 86400000));
+    }
+    const opened = debt.at ? new Date(debt.at) : null;
+    if (!opened || Number.isNaN(opened.getTime())) return 0;
+    return Math.max(0, Math.round((today - new Date(opened.getFullYear(), opened.getMonth(), opened.getDate())) / 86400000));
+  }
+  function inAge(debt) {
+    if (tab !== 'OPEN' || age === 'all') return true;
+    const days = lateDays(debt);
+    if (age === '0') return days <= 7;
+    if (age === '8') return days >= 8 && days <= 30;
+    if (age === '31') return days >= 31 && days <= 60;
+    return days > 60;
+  }
   const rows = shop.debts
-    .filter((d) => visibleDebt(d) && (d.status||'OPEN')===tab && `${d.customer} ${d.phone}`.toLowerCase().includes(needle))
+    .filter((d) => visibleDebt(d) && (d.status||'OPEN')===tab && inAge(d) && `${d.customer} ${d.phone}`.toLowerCase().includes(needle))
     .slice()
     .sort((a, b) => order === 'big' ? b.balance - a.balance : a.balance - b.balance);
   const openRows = shop.debts.filter((d) => (d.status || 'OPEN') === 'OPEN');
@@ -1759,7 +1894,7 @@ function Debts({ shop, query, setQuery, onSaved }) {
         {[['Deni wazi', tsh(shop.money.openDebt)], ['Wateja', String(openRows.length)], ['Yamelipwa', String(paidRows.length)], ['Wastani', tsh(openRows.length ? shop.money.openDebt / openRows.length : 0)]].map(([k, v]) => (
           <article key={k} className="pv-panel" style={{ padding:'12px 14px' }}>
             <p style={{ fontSize:11, fontWeight:800, letterSpacing:'0.08em', textTransform:'uppercase', color:'var(--text-secondary)' }}>{t(k)}</p>
-            <p style={{ fontSize:18, fontWeight:800, marginTop:4, color: k==='Deni wazi' ? 'var(--warning)' : 'var(--text-primary)' }}>{v}</p>
+            <p style={{ fontSize:18, fontWeight:800, marginTop:4, color: k==='Deni wazi' ? 'var(--warning)' : 'var(--text-primary)' }}>{marks(v)}</p>
           </article>
         ))}
       </div>
@@ -1770,6 +1905,9 @@ function Debts({ shop, query, setQuery, onSaved }) {
         <div style={{ display:'flex', gap:6 }}>
           {[['OPEN','Wazi'],['PAID','Yamelipwa']].map(([id,label]) => (
             <KindTab key={id} active={tab===id} onClick={() => setTab(id)}>{t(label)}</KindTab>
+          ))}
+          {tab === 'OPEN' && [['all','Zote'],['0','Siku 0–7'],['8','Siku 8–30'],['31','Siku 31–60'],['60','Zaidi ya siku 60']].map(([id, label]) => (
+            <KindTab key={id} active={age===id} secondary onClick={() => setAge(id)}>{t(label)}</KindTab>
           ))}
           <KindTab active={order==='big'} secondary onClick={() => setOrder(order==='big' ? 'small' : 'big')}>{order==='big' ? t('Baki kubwa') : t('Baki ndogo')}</KindTab>
           {tab==='PAID' && paidRows.length > 0 && <BtnSecondary onClick={() => api('/api/admin/debts/hide', { mode:'paid' }, 'POST').then(() => onSaved('Madeni yameondolewa.')).catch((err) => setError(err.message))}>{t('Ondoa yaliyolipwa')}</BtnSecondary>}
@@ -1808,7 +1946,8 @@ function Debts({ shop, query, setQuery, onSaved }) {
                 <p style={{ fontWeight:800 }}>{debt.customer}</p>
                 <span style={{ fontSize:11, fontWeight:800, color: debt.status==='PAID' ? '#509541' : 'var(--warning)' }}>{debt.status==='PAID' ? 'Imelipwa' : 'Wazi'}</span>
               </div>
-              <p style={{ fontSize:12, color:'var(--text-secondary)' }}>{debt.phone || 'Bila namba'}</p>
+              <p style={{ fontSize:12, color:'var(--text-secondary)' }}>{debt.phone || t('Bila namba')}</p>
+              {debt.status !== 'PAID' && <p style={{ fontSize:12, color:'var(--text-secondary)' }}>{t('Umri wa deni')} · {fill(t('siku {0}'), lateDays(debt))}</p>}
               <p style={{ fontSize:22, fontWeight:800, color: debt.status==='PAID' ? '#0f172a' : 'var(--warning)' }}>{tsh(debt.balance)}</p>
               <div className="pv-bar"><i style={{ width:`${Math.round(done * 100)}%` }} /></div>
               <p style={{ fontSize:12, color:'var(--text-secondary)' }}>Chanzo {tsh(debt.principal)} · malipo {debt.payments.length}</p>
@@ -1844,7 +1983,10 @@ function Qty({ value, max, onChange }) {
 
 function Wings({ rows, shop, onSaved }) {
   const t = useT();
+  const who = useWho();
   const [back, setBack] = useState(null);
+  const [sell, setSell] = useState(null);
+  const [pay, setPay] = useState(null);
   const [make, setMake] = useState(false);
   const [person, setPerson] = useState('');
   const [phone, setPhone] = useState('');
@@ -1898,7 +2040,7 @@ function Wings({ rows, shop, onSaved }) {
     setQty((prev) => ({ ...prev, [key]: n }));
   }
   function openTake() {
-    setMake(true); setBack(null); setError('');
+    setMake(true); setBack(null); setSell(null); setPay(null); setError('');
     setPerson(''); setPhone(''); setNote(''); setFind(''); setKind(''); setQty({});
   }
   async function saveTake(e) {
@@ -1922,7 +2064,7 @@ function Wings({ rows, shop, onSaved }) {
     if (busy) return;
     const picks = back.items.filter((it) => Number(it.give) > 0).map((it) => ({ id: it.id, qty: Number(it.give) }));
     if (!picks.length) { setError('Chagua idadi anayorudisha.'); return; }
-    const still = back.items.some((it) => it.qty - it.back - Number(it.give || 0) > 0);
+    const still = back.items.some((it) => it.qty - it.back - Number(it.sold || 0) - Number(it.give || 0) > 0);
     setBusy(true); setError('');
     try {
       await api(`/api/admin/wings/${back.id}/return`, { picks }, 'POST');
@@ -1941,6 +2083,62 @@ function Wings({ rows, shop, onSaved }) {
   function give(id, next, max) {
     setBack((row) => ({ ...row, items: row.items.map((it) => it.id === id ? { ...it, give: Math.max(0, Math.min(max, next)) } : it) }));
   }
+  function openSell(row) {
+    setMake(false); setBack(null); setPay(null); setError('');
+    setSell({
+      id: row.id,
+      person: row.person,
+      phone: row.phone || '',
+      kind: 'CASH',
+      part: 'CASH',
+      unit: 'SIKU',
+      term: '7',
+      amount: '',
+      lipa: '',
+      items: (row.items || []).map((it) => {
+        const hold = it.qty - it.back - Number(it.sold || 0);
+        const unit = (shop?.units || []).find((phone) => phone.id === it.phoneId);
+        const good = (shop?.stock || []).find((product) => product.id === it.productId);
+        return { ...it, hold, give: 0, price: String(unit?.price || good?.price || ''), floor: Number(unit?.floor || unit?.price || 0) };
+      }).filter((it) => it.hold > 0),
+    });
+  }
+  async function saveSell(e) {
+    e.preventDefault();
+    if (busy || !sell) return;
+    const picks = sell.items.filter((it) => Number(it.give) > 0).map((it) => ({ id: it.id, qty: Number(it.give), price: Number(it.price) }));
+    if (!picks.length) { setError('Chagua bidhaa aliyouza.'); return; }
+    const method = sell.kind === 'ALL' ? 'DENI' : (sell.kind === 'PART' ? sell.part : sell.kind);
+    const count = Number(sell.term || 0);
+    const termDays = sell.unit === 'WIKI' ? count * 7 : sell.unit === 'MWEZI' ? count * 30 : count;
+    setBusy(true); setError('');
+    try {
+      await api(`/api/admin/wings/${sell.id}/sell`, {
+        picks, method, amount: sell.kind === 'ALL' ? 0 : Number(sell.amount || 0), lipaRef: sell.lipa,
+        termDays, termUnit: sell.unit, person: sell.person, phone: sell.phone,
+      }, 'POST');
+      setSell(null);
+      onSaved(t('Mauzo yamehifadhiwa. Mtu hubaki wazi mpaka alipe au arudishe.'));
+    } catch (err) { setError(err.message); }
+    finally { setBusy(false); }
+  }
+  async function savePay(e) {
+    e.preventDefault();
+    if (busy || !pay) return;
+    setBusy(true); setError('');
+    try {
+      await api(`/api/admin/debts/${pay.id}/pay`, { amount: pay.cover === 'ALL' ? Number(pay.balance) : Number(pay.amount), method: pay.method, note: pay.lipa }, 'POST');
+      setPay(null);
+      onSaved(t('Malipo yamehifadhiwa'));
+    } catch (err) { setError(err.message); }
+    finally { setBusy(false); }
+  }
+  const sellTotal = sell ? sell.items.reduce((sum, it) => sum + (Number(it.give) || 0) * (Number(it.price) || 0), 0) : 0;
+  const sellRaw = !sell || sell.kind === 'ALL' ? 0 : Number(sell.amount || 0);
+  const sellCash = Boolean(sell && (sell.kind === 'CASH' || (sell.kind === 'PART' && sell.part === 'CASH')));
+  const sellHanded = sellCash || sellRaw <= sellTotal ? sellRaw : sellTotal;
+  const sellChange = sellCash ? Math.max(0, sellRaw - sellTotal) : 0;
+  const sellDebt = Math.max(0, sellTotal - (sellCash ? sellRaw : sellHanded));
   const empty = q.trim()
     ? t('Hakuna mawinga yenye neno hilo.')
     : (scope === 'back' ? t('Hakuna kilichorudi.') : t('Hakuna bidhaa iliyo nje kwa sasa.'));
@@ -1950,11 +2148,11 @@ function Wings({ rows, shop, onSaved }) {
       <div className="pv-wing-head">
         <article className="pv-wing-stat warn">
           <p>{t('Hawajarudi')}</p>
-          <strong>{open.length}</strong>
+          <strong>{marks(open.length)}</strong>
         </article>
         <article className="pv-wing-stat">
           <p>{t('Zilizorudi')}</p>
-          <strong>{backRows.length}</strong>
+          <strong>{marks(backRows.length)}</strong>
         </article>
         <BtnPrimary onClick={openTake} icon={Plus}>{t('Mtu amechukua')}</BtnPrimary>
       </div>
@@ -1983,7 +2181,7 @@ function Wings({ rows, shop, onSaved }) {
               <KindTab active={kind==='phones'} onClick={() => setKind('phones')}>{t('Simu')}</KindTab>
               <KindTab active={kind==='goods'} onClick={() => setKind('goods')}>{t('Vifaa')}</KindTab>
               {cats.filter((row) => row.id !== 'phones').map((row) => (
-                <KindTab key={row.id} active={kind===row.id} secondary onClick={() => setKind(row.id)}>{row.name}</KindTab>
+                <KindTab key={row.id} active={kind===row.id} secondary onClick={() => setKind(row.id)}>{t(row.name)}</KindTab>
               ))}
             </div>
             <div className="pv-catalog">
@@ -2029,22 +2227,100 @@ function Wings({ rows, shop, onSaved }) {
             <p className="pv-wing-note">{t('Chagua idadi anayorudisha sasa. Akirudisha kimoja, vilivyobaki vinabaki nje, na muda unaandikwa.')}</p>
           </div>
           <div className="pv-catalog">
-            {back.items.filter((it) => it.qty - it.back > 0).map((it) => {
-              const left = it.qty - it.back;
+            {back.items.filter((it) => it.qty - it.back - Number(it.sold || 0) > 0).map((it) => {
+              const left = it.qty - it.back - Number(it.sold || 0);
               return (
                 <article key={it.id} className="pv-goods on">
                   <span>{t('Nje')}</span>
                   <p>{it.name}</p>
-                  <small>{fill(t('Nje x{0}'), left)}</small>
+                  <small>{t('Idadi')} {left}</small>
                   <Qty value={Number(it.give) || 0} max={left} onChange={(n) => give(it.id, n, left)} />
                 </article>
               );
             })}
           </div>
           <div className="pv-wing-actions">
-            <BtnSecondary type="button" onClick={() => setBack((row) => ({ ...row, items: row.items.map((it) => ({ ...it, give: Math.max(0, it.qty - it.back) })) }))}>{t('Rudisha zote')}</BtnSecondary>
+            <BtnSecondary type="button" onClick={() => setBack((row) => ({ ...row, items: row.items.map((it) => ({ ...it, give: Math.max(0, it.qty - it.back - Number(it.sold || 0)) })) }))}>{t('Rudisha zote')}</BtnSecondary>
             <BtnPrimary type="submit" icon={RotateCcw} disabled={busy}>{t('Hifadhi kurudi')}</BtnPrimary>
             <BtnSecondary type="button" onClick={() => setBack(null)}>{t('Ghairi')}</BtnSecondary>
+          </div>
+        </form>
+      )}
+
+      {sell && (
+        <form onSubmit={saveSell} className="pv-panel pv-wing-back">
+          <div>
+            <p className="pv-wing-title">{t('Ameuza')}</p>
+          </div>
+          <input value={sell.person} onChange={(e) => setSell((row) => ({ ...row, person: e.target.value }))} placeholder={t('Jina la mteja')} maxLength={60} style={inputSx} />
+          <input value={sell.phone} onChange={(e) => setSell((row) => ({ ...row, phone: e.target.value }))} placeholder={t('Simu ya mteja')} inputMode="tel" style={inputSx} />
+          <div className="pv-catalog">
+            {sell.items.map((it) => (
+              <article key={it.id} className="pv-goods on">
+                <span>{t('Nje')}</span>
+                <p>{it.name}</p>
+                <small>{t('Idadi')} {it.hold}{it.floor > 0 ? `  ${fill(t('Bei ya chini {0}'), tsh(it.floor))}` : ''}</small>
+                <Qty value={Number(it.give) || 0} max={it.hold} onChange={(n) => setSell((row) => ({ ...row, items: row.items.map((item) => item.id === it.id ? { ...item, give: n } : item) }))} />
+                <input value={it.price} onChange={(e) => setSell((row) => ({ ...row, items: row.items.map((item) => item.id === it.id ? { ...item, price: e.target.value } : item) }))} placeholder={t('Bei')} inputMode="numeric" style={inputSx} />
+              </article>
+            ))}
+          </div>
+          <div className="pv-chips">
+            <KindTab active={sell.kind === 'CASH'} onClick={() => setSell((row) => ({ ...row, kind: 'CASH' }))}>{t('Cash')}</KindTab>
+            <KindTab active={sell.kind === 'LIPA'} onClick={() => setSell((row) => ({ ...row, kind: 'LIPA' }))}>{t('Lipa Namba')}</KindTab>
+            {who.perms.debts && <KindTab active={sell.kind === 'PART'} onClick={() => setSell((row) => ({ ...row, kind: 'PART' }))}>{t('Deni nusu')}</KindTab>}
+            {who.perms.debts && <KindTab active={sell.kind === 'ALL'} onClick={() => setSell((row) => ({ ...row, kind: 'ALL' }))}>{t('Deni zima')}</KindTab>}
+          </div>
+          {sell.kind === 'PART' && (
+            <div className="pv-chips">
+              <KindTab active={sell.part === 'CASH'} onClick={() => setSell((row) => ({ ...row, part: 'CASH' }))}>{t('Cash')}</KindTab>
+              <KindTab active={sell.part === 'LIPA'} onClick={() => setSell((row) => ({ ...row, part: 'LIPA' }))}>{t('Lipa Namba')}</KindTab>
+            </div>
+          )}
+          {sell.kind !== 'ALL' && <input value={sell.amount} onChange={(e) => setSell((row) => ({ ...row, amount: e.target.value }))} placeholder={t('Alichotoa')} inputMode="numeric" style={inputSx} />}
+          {(sell.kind === 'LIPA' || (sell.kind === 'PART' && sell.part === 'LIPA')) && <input value={sell.lipa} onChange={(e) => setSell((row) => ({ ...row, lipa: e.target.value }))} placeholder={t('Kumbukumbu ya Lipa')} style={inputSx} />}
+          {sellDebt > 0.5 && who.perms.debts && (
+            <>
+              <p className="pv-wing-note">{t('Anakopa kwa muda gani?')}</p>
+              <div className="pv-chips">
+                {[['SIKU', 'Siku'], ['WIKI', 'Wiki'], ['MWEZI', 'Mwezi']].map(([id, label]) => (
+                  <KindTab key={id} active={sell.unit === id} onClick={() => setSell((row) => ({ ...row, unit: id }))}>{t(label)}</KindTab>
+                ))}
+              </div>
+              <input value={sell.term} onChange={(e) => setSell((row) => ({ ...row, term: e.target.value }))} placeholder={t('Muda')} inputMode="numeric" style={inputSx} />
+            </>
+          )}
+          <div className="pv-loan-meta">
+            <span>{t('Anachotakiwa kulipa')} {tsh(sellTotal)}</span>
+            <span>{t('Alichotoa')} {tsh(sell.kind === 'ALL' ? 0 : sellHanded)}</span>
+            <span>{sellDebt > 0.5 ? `${t('Deni litabaki')} ${tsh(sellDebt)}` : `${t('Alichorudishiwa')} ${tsh(sellChange)}`}</span>
+          </div>
+          <div className="pv-wing-actions">
+            <BtnPrimary type="submit" icon={CheckCircle2} disabled={busy || sellTotal <= 0}>{t('Thibitisha mauzo')}</BtnPrimary>
+            <BtnSecondary type="button" onClick={() => setSell(null)}>{t('Ghairi')}</BtnSecondary>
+          </div>
+        </form>
+      )}
+
+      {pay && (
+        <form onSubmit={savePay} className="pv-panel pv-wing-back">
+          <div>
+            <p className="pv-wing-title">{tsh(pay.balance)}</p>
+            <p className="pv-wing-note">{t('Malipo haya yanafunga mtu pale deni na bidhaa zote zinapoisha.')}</p>
+          </div>
+          <div className="pv-chips">
+            <KindTab active={pay.cover !== 'ALL'} onClick={() => setPay((row) => ({ ...row, cover: 'PART' }))}>{t('Deni nusu')}</KindTab>
+            <KindTab active={pay.cover === 'ALL'} onClick={() => setPay((row) => ({ ...row, cover: 'ALL' }))}>{t('Deni zima')}</KindTab>
+            {['CASH', 'LIPA'].map((method) => (
+              <KindTab key={method} active={pay.method === method} onClick={() => setPay((row) => ({ ...row, method }))}>{t(method === 'LIPA' ? 'Lipa Namba' : 'Cash')}</KindTab>
+            ))}
+          </div>
+          {pay.cover !== 'ALL' && <input value={pay.amount} onChange={(e) => setPay((row) => ({ ...row, amount: e.target.value }))} placeholder={t('Analipa sasa')} inputMode="numeric" style={inputSx} />}
+          {pay.cover === 'ALL' && <p className="pv-wing-note">{fill(t('Analipa baki yote {0}'), tsh(pay.balance))}</p>}
+          {pay.method === 'LIPA' && <input value={pay.lipa} onChange={(e) => setPay((row) => ({ ...row, lipa: e.target.value }))} placeholder={t('Kumbukumbu ya Lipa')} style={inputSx} />}
+          <div className="pv-wing-actions">
+            <BtnPrimary type="submit" icon={CheckCircle2} disabled={busy}>{t('Hifadhi')}</BtnPrimary>
+            <BtnSecondary type="button" onClick={() => setPay(null)}>{t('Ghairi')}</BtnSecondary>
           </div>
         </form>
       )}
@@ -2053,7 +2329,8 @@ function Wings({ rows, shop, onSaved }) {
       <div className="pv-wing-grid">
         {shown.map((r) => {
           const away = r.status !== 'BACK';
-          const pieces = (r.items || []).reduce((sum, it) => sum + Math.max(0, it.qty - it.back), 0);
+          const pieces = (r.items || []).reduce((sum, it) => sum + Math.max(0, it.qty - it.back - Number(it.sold || 0)), 0);
+          const owing = (r.debts || []).reduce((sum, debt) => sum + Number(debt.balance || 0), 0);
           return (
             <article key={r.id} className={`pv-loan${away ? ' out' : ''}`}>
               <header>
@@ -2062,33 +2339,41 @@ function Wings({ rows, shop, onSaved }) {
                   <p>{r.person}</p>
                   <small>{r.phone || t('Bila namba')}</small>
                 </div>
-                <b className={away ? 'out' : ''}>{away ? t('Nje') : t('Amerudi')}</b>
+                <b className={away ? 'out' : ''}>{away ? (pieces > 0 ? t('Nje') : t('Analipa')) : t('Amerudi')}</b>
               </header>
               <div className="pv-loan-meta">
                 <span>{fill(t('Alichukua {0}'), when(r.at))}</span>
                 {!away && r.returnedAt && <span>{fill(t('Alirudisha {0}'), when(r.returnedAt))}</span>}
                 {r.staff && <span>{fill(t('Aliyeandika {0}'), r.staff)}</span>}
-                {away && <span>{fill(t('Nje x{0}'), pieces)}</span>}
+                {away && <span>{t('Idadi')} {pieces}</span>}
+                {away && owing > 0 && <span>{fill(t('Baki {0}'), tsh(owing))}</span>}
               </div>
               {r.note && <p className="pv-loan-note">{r.note}</p>}
               <div className="pv-loan-items">
                 {(r.items || []).map((it) => {
-                  const left = it.qty - it.back;
-                  const done = it.qty > 0 ? Math.min(100, Math.round((it.back / it.qty) * 100)) : 0;
+                  const left = it.qty - it.back - Number(it.sold || 0);
+                  const done = it.qty > 0 ? Math.min(100, Math.round(((it.back + Number(it.sold || 0)) / it.qty) * 100)) : 0;
                   return (
                     <div key={it.id}>
                       <div>
                         <span>{it.name}</span>
-                        <b>{away ? (left > 0 ? fill(t('Nje x{0}'), left) : t('Imerudi')) : `x${it.qty}`}</b>
+                        <b>{left > 0 ? left : it.qty}</b>
                       </div>
-                      {away && it.back > 0 && <small>{fill(t('Amerudi x{0}'), it.back)}</small>}
+                      {away && it.back > 0 && <small>{t('Amerudi')} {it.back}</small>}
+                      {away && Number(it.sold) > 0 && <small>{t('Ameuza')} {it.sold}</small>}
                       <i style={{ width:`${away ? 100 - done : 100}%` }} />
                     </div>
                   );
                 })}
               </div>
               {away
-                ? <BtnPrimary onClick={() => { setMake(false); setBack({ id:r.id, person:r.person, items:r.items.map((it) => ({ ...it, give:0 })) }); }} icon={RotateCcw}>{t('Rudisha')}</BtnPrimary>
+                ? <div className="pv-wing-actions">
+                    {pieces > 0 && <BtnPrimary onClick={() => { setMake(false); setSell(null); setPay(null); setBack({ id:r.id, person:r.person, items:r.items.map((it) => ({ ...it, give:0 })) }); }} icon={RotateCcw}>{t('Rudisha')}</BtnPrimary>}
+                    {pieces > 0 && <BtnSecondary onClick={() => openSell(r)}>{t('Ameuza')}</BtnSecondary>}
+                    {(r.debts || []).map((debt) => (
+                      <BtnPrimary key={debt.id} onClick={() => { setMake(false); setBack(null); setSell(null); setPay({ id: debt.id, balance: debt.balance, amount: '', method: 'CASH', lipa: '', cover: 'PART' }); }}>{fill(t('Lipa baki {0}'), tsh(debt.balance))}</BtnPrimary>
+                    ))}
+                  </div>
                 : <BtnSecondary onClick={() => drop(r.id)}>{t('Ondoa mawinga')}</BtnSecondary>}
             </article>
           );
@@ -2135,7 +2420,7 @@ function Faults({ shop, onSell }) {
         {[['Simu', phones.length], ['Mifululizo', piles.length], ['Vifaa', goods.length], ['Jumla', cards.length]].map(([k, v]) => (
           <article key={k} className="pv-panel" style={{ padding:'12px 14px' }}>
             <p style={{ fontSize:11, fontWeight:800, letterSpacing:'0.08em', textTransform:'uppercase', color:'var(--text-secondary)' }}>{t(k)}</p>
-            <p style={{ fontSize:22, fontWeight:800 }}>{v}</p>
+            <p style={{ fontSize:22, fontWeight:800 }}>{marks(v)}</p>
           </article>
         ))}
       </div>
@@ -2179,7 +2464,7 @@ function Faults({ shop, onSell }) {
             <p style={{ fontWeight:700, fontSize:14, color:'var(--text-primary)', marginBottom:4 }}>{card.title}</p>
             <p style={{ fontSize:12, color:'var(--text-secondary)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginBottom:12 }}>{card.meta}</p>
             <p style={{ fontWeight:800, fontSize:15, color:'var(--accent)', marginBottom:2 }}>{tsh(card.price)}</p>
-            <p style={{ fontSize:11, color:'var(--danger)', fontWeight:700 }}>{card.foot}</p>
+            <p style={{ fontSize:11, color:'var(--danger)', fontWeight:700 }}>{marks(card.foot)}</p>
           </button>
         ))}
       </div>
@@ -2224,7 +2509,7 @@ function Customers({ rows, sales, debts, returns, query, setQuery, onSaved, star
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
       <div className="pv-stats">
-        <article className="pv-kpi"><p>{t('Wateja')}</p><p>{rows.length}</p></article>
+        <article className="pv-kpi"><p>{t('Wateja')}</p><p>{marks(rows.length)}</p></article>
         <article className="pv-kpi"><p>{t('Matumizi')}</p><p>{tsh(spent)}</p></article>
         <article className="pv-kpi pv-kpi-warn"><p>{t('Wenye deni')}</p><p>{openDebt}</p></article>
         <article className="pv-kpi"><p>{t('Wastani')}</p><p>{tsh(rows.length ? Math.round(spent/rows.length) : 0)}</p></article>
@@ -2271,7 +2556,7 @@ function Customers({ rows, sales, debts, returns, query, setQuery, onSaved, star
               <span className="pv-avatar">{String(open.name||'M').slice(0,1).toUpperCase()}</span>
               <div>
                 <p style={{ fontWeight:800 }}>{open.name}</p>
-                <p style={{ fontSize:12, color:'var(--text-secondary)' }}>{open.phone||'Bila namba'}</p>
+                <p style={{ fontSize:12, color:'var(--text-secondary)' }}>{open.phone||t('Bila namba')}</p>
               </div>
             </div>
             <div style={{ display:'flex', gap:8 }}>
@@ -2280,9 +2565,9 @@ function Customers({ rows, sales, debts, returns, query, setQuery, onSaved, star
             </div>
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))', gap:14 }}>
-            <Block title="Risiti" icon={HistoryIcon} rows={(sales||[]).filter(mine).map((s)=>({id:s.id,title:s.invoice,meta:when(s.at),aside:tsh(s.total),detail:s.method}))} />
-            <Block title="Deni" icon={CreditCard} rows={(debts||[]).filter(mine).map((d)=>({id:d.id,title:d.customer,meta:d.phone,aside:tsh(d.balance),detail:`Chanzo ${tsh(d.principal)}`}))} />
-            <Block title="Marejesho" icon={RotateCcw} rows={(returns||[]).filter(mine).map((r)=>({id:r.id,title:r.invoice,meta:r.saleInvoice,aside:tsh(r.refund),detail:r.reason}))} />
+            <Block title={t('Risiti')} icon={HistoryIcon} rows={(sales||[]).filter(mine).map((s)=>({id:s.id,title:s.invoice,meta:when(s.at),aside:tsh(s.total),detail:word(t, s.method)}))} />
+            <Block title={t('Deni')} icon={CreditCard} rows={(debts||[]).filter(mine).map((d)=>({id:d.id,title:d.customer,meta:d.phone,aside:tsh(d.balance),detail:`${t('Chanzo')} ${tsh(d.principal)}`}))} />
+            <Block title={t('Marejesho')} icon={RotateCcw} rows={(returns||[]).filter(mine).map((r)=>({id:r.id,title:r.invoice,meta:r.saleInvoice,aside:tsh(r.refund),detail:r.reason}))} />
           </div>
         </div>
       )}
@@ -2296,14 +2581,14 @@ function Customers({ rows, sales, debts, returns, query, setQuery, onSaved, star
                 <span className="pv-avatar">{String(r.name||'M').slice(0,1).toUpperCase()}</span>
                 <div style={{ minWidth:0, flex:1 }}>
                   <p style={{ fontWeight:800, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.name}</p>
-                  <p style={{ fontSize:12, color:'var(--text-secondary)' }}>{r.phone||'Bila namba'}</p>
+                  <p style={{ fontSize:12, color:'var(--text-secondary)' }}>{r.phone||t('Bila namba')}</p>
                 </div>
               </div>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline' }}>
                 <span style={{ fontSize:12, color:'var(--text-secondary)' }}>{t('Matumizi')}</span>
                 <strong>{tsh(r.spent)}</strong>
               </div>
-              {due>0 && <p style={{ fontSize:12, fontWeight:700, color:'#b45309' }}>Deni {tsh(due)}</p>}
+              {due>0 && <p style={{ fontSize:12, fontWeight:700, color:'#b45309' }}>{t('Deni')} {tsh(due)}</p>}
               <div style={{ display:'flex', gap:8 }}>
                 <BtnPrimary onClick={() => setOpen(open?.id===r.id?null:r)}>{t('Angalia')}</BtnPrimary>
                 <BtnSecondary onClick={() => api(`/api/admin/customers/${r.id}`,null,'DELETE').then(()=>onSaved('Mteja ameondolewa.')).catch((err)=>setError(err.message))}>{t('Futa')}</BtnSecondary>
@@ -2417,8 +2702,10 @@ function Report({ shop, start, end }) {
     return cmp * sort.dir;
   });
   const view = reportView(kind, rows);
-  const pie = view.pie.filter((s) => s.value !== 0);
-  const tip = (v) => view.cash ? tsh(v) : v;
+  const named = (row) => ({ ...row, name: t(WORD[row.name] || row.name) });
+  const pie = view.pie.filter((s) => s.value !== 0).map(named);
+  const bars = view.bar.map(named);
+  const tip = (v) => view.cash ? tsh(v) : marks(v);
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
@@ -2437,7 +2724,7 @@ function Report({ shop, start, end }) {
 
       <div className="pv-stats">
         {view.kpis.map(([label, value]) => (
-          <article key={label} className="pv-kpi"><p>{t(label)}</p><p>{value}</p></article>
+          <article key={label} className="pv-kpi"><p>{t(label)}</p><p>{marks(value)}</p></article>
         ))}
       </div>
 
@@ -2450,7 +2737,7 @@ function Report({ shop, start, end }) {
 
       <div className="pv-home-split">
         <article className="pv-panel">
-          <p style={{ fontWeight:800, marginBottom:8 }}>{view.pieTitle}</p>
+          <p style={{ fontWeight:800, marginBottom:8 }}>{t(view.pieTitle)}</p>
           <div className="pv-chart">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -2463,32 +2750,32 @@ function Report({ shop, start, end }) {
           </div>
           {pie.slice(0, 5).map((s) => (
             <p key={s.name} style={{ display:'flex', justifyContent:'space-between', gap:8, fontSize:13, marginTop:4 }}>
-              <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}><span style={{ display:'inline-block', width:8, height:8, borderRadius:99, background:s.color, marginRight:8 }} />{t(s.name)}</span>
+              <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}><span style={{ display:'inline-block', width:8, height:8, borderRadius:99, background:s.color, marginRight:8 }} />{t(WORD[s.name] || s.name)}</span>
               <b>{tip(s.value)}</b>
             </p>
           ))}
         </article>
         <article className="pv-panel">
-          <p style={{ fontWeight:800, marginBottom:8 }}>{view.barTitle}</p>
+          <p style={{ fontWeight:800, marginBottom:8 }}>{t(view.barTitle)}</p>
           <div className="pv-chart" style={{ height:280 }}>
             <ResponsiveContainer width="100%" height="100%">
               {view.pair ? (
-                <BarChart data={view.bar.length ? view.bar : [{ name:'—', Baki:0, Kiwango:0 }]}>
+                <BarChart data={bars.length ? bars : [{ name:'—', Baki:0, Kiwango:0 }]}>
                   <CartesianGrid stroke="#e3f0df" vertical={false} />
                   <XAxis dataKey="name" tick={{ fontSize:11, fill:'#64748b' }} interval={0} angle={-18} height={48} />
-                  <YAxis tick={{ fontSize:11, fill:'#64748b' }} width={36} />
+                  <YAxis tick={{ fontSize:11, fill:'#64748b' }} width={36} tickFormatter={marks} />
                   <Tooltip contentStyle={CHART_TIP} />
-                  <Bar dataKey="Baki" fill="#509541" radius={[6,6,0,0]} />
-                  <Bar dataKey="Kiwango" fill="#b45309" radius={[6,6,0,0]} />
+                  <Bar dataKey="Baki" name={t('Baki')} fill="#509541" radius={[6,6,0,0]} />
+                  <Bar dataKey="Kiwango" name={t('Kiwango')} fill="#b45309" radius={[6,6,0,0]} />
                 </BarChart>
               ) : (
-                <BarChart data={view.bar.length ? view.bar : [{ name:'—', value:0 }]}>
+                <BarChart data={bars.length ? bars : [{ name:'—', value:0 }]}>
                   <CartesianGrid stroke="#e3f0df" vertical={false} />
                   <XAxis dataKey="name" tick={{ fontSize:11, fill:'#64748b' }} interval={0} angle={-18} height={48} />
-                  <YAxis tick={{ fontSize:11, fill:'#64748b' }} width={64} />
+                  <YAxis tick={{ fontSize:11, fill:'#64748b' }} width={64} tickFormatter={marks} />
                   <Tooltip formatter={(v) => view.barCash===false ? v : tip(v)} contentStyle={CHART_TIP} />
                   <Bar dataKey="value" radius={[8,8,0,0]}>
-                    {view.bar.map((row) => <Cell key={row.name} fill={row.value < 0 ? '#b45309' : '#509541'} />)}
+                    {bars.map((row) => <Cell key={row.name} fill={row.value < 0 ? '#b45309' : '#509541'} />)}
                   </Bar>
                 </BarChart>
               )}
@@ -2499,7 +2786,7 @@ function Report({ shop, start, end }) {
 
       {!!view.area?.length && (
         <article className="pv-panel">
-          <p style={{ fontWeight:800, marginBottom:8 }}>{view.areaTitle}</p>
+          <p style={{ fontWeight:800, marginBottom:8 }}>{t(view.areaTitle)}</p>
           <div className="pv-chart">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={view.area}>
@@ -2510,8 +2797,8 @@ function Report({ shop, start, end }) {
                   </linearGradient>
                 </defs>
                 <CartesianGrid stroke="#e3f0df" vertical={false} />
-                <XAxis dataKey="day" tick={{ fontSize:11, fill:'#64748b' }} />
-                <YAxis tick={{ fontSize:11, fill:'#64748b' }} width={64} />
+                <XAxis dataKey="day" tick={{ fontSize:11, fill:'#64748b' }} tickFormatter={marks} />
+                <YAxis tick={{ fontSize:11, fill:'#64748b' }} width={64} tickFormatter={marks} />
                 <Tooltip formatter={(v) => tip(v)} contentStyle={CHART_TIP} />
                 <Area type="monotone" dataKey="total" name={view.areaTitle} stroke="#509541" fill="url(#repFill)" strokeWidth={2.5} />
               </AreaChart>
@@ -2526,7 +2813,7 @@ function Report({ shop, start, end }) {
             <tr>
               {table.heads.map((h, i) => (
                 <th key={h} style={{ cursor:'pointer' }} onClick={() => setSort({ i, dir: sort.i===i ? -sort.dir : -1 })}>
-                  {h}{sort.i===i ? (sort.dir<0?' ↓':' ↑') : ''}
+                  {t(h)}{sort.i===i ? (sort.dir<0?' ↓':' ↑') : ''}
                 </th>
               ))}
             </tr>
@@ -2537,7 +2824,8 @@ function Report({ shop, start, end }) {
                 {row.map((cell,ci) => {
                   const head = table.heads[ci];
                   const moneyCell = typeof cell==='number' && (REPORT_MONEY.has(head) || (kind==='madeni' && head==='Baki'));
-                  return <td key={ci}>{moneyCell ? tsh(cell) : cell}</td>;
+                  const known = typeof cell === 'string' ? word(t, cell) : cell;
+                  return <td key={ci}>{moneyCell ? tsh(cell) : (typeof known === 'number' ? marks(known) : marks(known))}</td>;
                 })}
               </tr>
             ))}
@@ -2575,7 +2863,7 @@ function MiniPie({ title, slices, money = true }) {
       </div>
       {drawn.slice(0, 5).map((s) => (
         <p key={s.name} style={{ display:'flex', justifyContent:'space-between', gap:8, fontSize:13, marginTop:4 }}>
-          <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}><span style={{ display:'inline-block', width:8, height:8, borderRadius:99, background:s.color, marginRight:8 }} />{t(s.name)}</span>
+          <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}><span style={{ display:'inline-block', width:8, height:8, borderRadius:99, background:s.color, marginRight:8 }} />{t(WORD[s.name] || s.name)}</span>
           <b>{money ? tsh(s.value) : s.value}</b>
         </p>
       ))}
@@ -2698,11 +2986,17 @@ function Analysis({ shop }) {
         <article className="pv-kpi pv-kpi-green"><p>{t('Faida')}</p><p>{tsh(profit.shopProfit)}</p></article>
         <article className="pv-kpi pv-kpi-warn"><p>{t('Deni wazi')}</p><p>{tsh(money.openDebt)}</p></article>
       </div>
+      {(Number(profit.wing?.sales) > 0 || Number(profit.wing?.returned) > 0) && (
+        <div className="pv-stats">
+          <article className="pv-kpi"><p>{t('Rejareja')}</p><p>{tsh(profit.retail?.profit || 0)}</p></article>
+          <article className="pv-kpi"><p>{t('Kwa mawinga')}</p><p>{tsh(profit.wing?.profit || 0)}</p></article>
+        </div>
+      )}
       <div className="pv-stats">
-        <article className="pv-kpi"><p>{t('Risiti')}</p><p>{money.receipts||0}</p></article>
+        <article className="pv-kpi"><p>{t('Risiti')}</p><p>{marks(money.receipts||0)}</p></article>
         <article className="pv-kpi"><p>{t('Wastani')}</p><p>{tsh(money.receipts ? Math.round(billed/money.receipts) : 0)}</p></article>
-        <article className="pv-kpi"><p>{t('Kiwango cha faida')}</p><p>{rate}%</p></article>
-        <article className="pv-kpi"><p>{t('Siku kubwa')}</p><p>{best ? best.day : '—'}</p></article>
+        <article className="pv-kpi"><p>{t('Kiwango cha faida')}</p><p>{marks(rate)}%</p></article>
+        <article className="pv-kpi"><p>{t('Siku kubwa')}</p><p>{best ? marks(best.day) : '—'}</p></article>
       </div>
 
       <div className="pv-home-three">
@@ -2711,10 +3005,10 @@ function Analysis({ shop }) {
           <p style={{ fontWeight:800, marginBottom:8 }}>{t('Faida kwa aina')}</p>
           <div className="pv-chart">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={profitBars}>
+              <BarChart data={profitBars.map((row) => ({ ...row, name: t(row.name) }))}>
                 <CartesianGrid stroke="#e3f0df" vertical={false} />
                 <XAxis dataKey="name" tick={{ fontSize:12, fill:'#64748b' }} />
-                <YAxis tick={{ fontSize:11, fill:'#64748b' }} width={64} />
+                <YAxis tick={{ fontSize:11, fill:'#64748b' }} width={64} tickFormatter={marks} />
                 <Tooltip formatter={(v) => tsh(v)} contentStyle={CHART_TIP} />
                 <Bar dataKey="value" radius={[8,8,0,0]}>
                   {profitBars.map((row) => <Cell key={row.name} fill={row.value<0?'#b45309':'#509541'} />)}
@@ -2732,8 +3026,8 @@ function Analysis({ shop }) {
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={days.length ? days : [{ day:'—', total:0 }]}>
               <CartesianGrid stroke="#e3f0df" vertical={false} />
-              <XAxis dataKey="day" tick={{ fontSize:11, fill:'#64748b' }} />
-              <YAxis tick={{ fontSize:11, fill:'#64748b' }} width={64} />
+              <XAxis dataKey="day" tick={{ fontSize:11, fill:'#64748b' }} tickFormatter={marks} />
+              <YAxis tick={{ fontSize:11, fill:'#64748b' }} width={64} tickFormatter={marks} />
               <Tooltip formatter={(v) => tsh(v)} contentStyle={CHART_TIP} />
               <Area type="monotone" dataKey="total" name="Mauzo" stroke="#509541" fill="#50954133" strokeWidth={2.5} />
             </AreaChart>
@@ -2749,7 +3043,7 @@ function Analysis({ shop }) {
               <BarChart data={cashiers.length ? cashiers.map((r) => ({ name:String(r.name).slice(0,14), value:r.total })) : [{ name:'—', value:0 }]}>
                 <CartesianGrid stroke="#e3f0df" vertical={false} />
                 <XAxis dataKey="name" tick={{ fontSize:11, fill:'#64748b' }} />
-                <YAxis tick={{ fontSize:11, fill:'#64748b' }} width={64} />
+                <YAxis tick={{ fontSize:11, fill:'#64748b' }} width={64} tickFormatter={marks} />
                 <Tooltip formatter={(v) => tsh(v)} contentStyle={CHART_TIP} />
                 <Bar dataKey="value" fill="#509541" radius={[8,8,0,0]} />
               </BarChart>
@@ -2763,7 +3057,7 @@ function Analysis({ shop }) {
               <BarChart data={people.slice(0, 8).map((r) => ({ name:String(r.name).slice(0,12), value:r.spent }))}>
                 <CartesianGrid stroke="#e3f0df" vertical={false} />
                 <XAxis dataKey="name" tick={{ fontSize:11, fill:'#64748b' }} interval={0} angle={-18} height={48} />
-                <YAxis tick={{ fontSize:11, fill:'#64748b' }} width={64} />
+                <YAxis tick={{ fontSize:11, fill:'#64748b' }} width={64} tickFormatter={marks} />
                 <Tooltip formatter={(v) => tsh(v)} contentStyle={CHART_TIP} />
                 <Bar dataKey="value" fill="#509541" radius={[8,8,0,0]} />
               </BarChart>
@@ -2783,9 +3077,9 @@ function Analysis({ shop }) {
           <p style={{ fontWeight:800, padding:'14px 16px 0' }}>{t('Kitabu cha faida')}</p>
           <div className="pv-sheet" style={{ border:'none' }}>
             <table>
-              <thead><tr>{['Aina','Mauzo','Gharama','Marejesho','Faida'].map((h) => <th key={h}>{h}</th>)}</tr></thead>
+              <thead><tr>{['Aina','Mauzo','Gharama','Marejesho','Faida'].map((h) => <th key={h}>{t(h)}</th>)}</tr></thead>
               <tbody>
-                {book.map((row) => <tr key={row[0]}>{row.map((cell, i) => <td key={i}>{i ? tsh(cell) : cell}</td>)}</tr>)}
+                {book.map((row) => <tr key={row[0]}>{row.map((cell, i) => <td key={i}>{i ? tsh(cell) : t(cell)}</td>)}</tr>)}
                 <tr><td>{t('Duka')}</td><td /><td /><td /><td>{tsh(profit.shopProfit)}</td></tr>
               </tbody>
             </table>
@@ -2806,17 +3100,17 @@ function Analysis({ shop }) {
         <MiniPie title="Warranty" slices={coverSlices} money={false} />
         <article className="pv-panel">
           <p style={{ fontWeight:800 }}>{t('Stoo')}</p>
-          <p style={{ fontSize:13, color:'var(--text-secondary)', marginTop:8 }}>Thamani {tsh(shop.stockValue)}</p>
-          <p style={{ fontSize:13, color:'var(--text-secondary)', marginTop:4 }}>Chini ya kiwango {shop.low||0}</p>
-          <p style={{ fontSize:13, color:'var(--text-secondary)', marginTop:4 }}>Bidhaa {(shop.stock||[]).length}</p>
-          <p style={{ fontSize:13, color:'var(--text-secondary)', marginTop:4 }}>Simu za IMEI {(shop.units||[]).length}</p>
+          <p style={{ fontSize:13, color:'var(--text-secondary)', marginTop:8 }}>{t('Thamani')} {tsh(shop.stockValue)}</p>
+          <p style={{ fontSize:13, color:'var(--text-secondary)', marginTop:4 }}>{t('Chini ya kiwango')} {marks(shop.low||0)}</p>
+          <p style={{ fontSize:13, color:'var(--text-secondary)', marginTop:4 }}>{t('Bidhaa')} {marks((shop.stock||[]).length)}</p>
+          <p style={{ fontSize:13, color:'var(--text-secondary)', marginTop:4 }}>{t('Simu za IMEI')} {marks((shop.units||[]).length)}</p>
         </article>
         <article className="pv-panel">
           <p style={{ fontWeight:800 }}>{t('Matatizo')}</p>
-          <p style={{ fontSize:13, color:'var(--text-secondary)', marginTop:8 }}>Kumbukumbu {(shop.faults||[]).length}</p>
-          <p style={{ fontSize:13, color:'var(--text-secondary)', marginTop:4 }}>Mauzo {tsh(profit.faultSales)}</p>
-          <p style={{ fontSize:13, color:'var(--text-secondary)', marginTop:4 }}>Gharama {tsh((profit.phoneFaults||0)+(profit.goodsFaults||0))}</p>
-          <p style={{ fontSize:13, color:'var(--text-secondary)', marginTop:4 }}>Faida {tsh(profit.faultProfit)}</p>
+          <p style={{ fontSize:13, color:'var(--text-secondary)', marginTop:8 }}>{t('Kumbukumbu')} {marks((shop.faults||[]).length)}</p>
+          <p style={{ fontSize:13, color:'var(--text-secondary)', marginTop:4 }}>{t('Mauzo')} {tsh(profit.faultSales)}</p>
+          <p style={{ fontSize:13, color:'var(--text-secondary)', marginTop:4 }}>{t('Gharama')} {tsh((profit.phoneFaults||0)+(profit.goodsFaults||0))}</p>
+          <p style={{ fontSize:13, color:'var(--text-secondary)', marginTop:4 }}>{t('Faida')} {tsh(profit.faultProfit)}</p>
         </article>
       </div>
     </div>
@@ -2843,10 +3137,10 @@ function Warranty({ rows }) {
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
       <div className="pv-stats">
-        <article className="pv-kpi pv-kpi-green"><p>{t('Haijaisha')}</p><p>{live.length}</p></article>
-        <article className="pv-kpi pv-kpi-warn"><p>{t('Karibu kuisha')}</p><p>{soon.length}</p></article>
-        <article className="pv-kpi"><p>{t('Imeisha')}</p><p>{dead.length}</p></article>
-        <article className="pv-kpi"><p>{t('Jumla')}</p><p>{rows.length}</p></article>
+        <article className="pv-kpi pv-kpi-green"><p>{t('Haijaisha')}</p><p>{marks(live.length)}</p></article>
+        <article className="pv-kpi pv-kpi-warn"><p>{t('Karibu kuisha')}</p><p>{marks(soon.length)}</p></article>
+        <article className="pv-kpi"><p>{t('Imeisha')}</p><p>{marks(dead.length)}</p></article>
+        <article className="pv-kpi"><p>{t('Jumla')}</p><p>{marks(rows.length)}</p></article>
       </div>
       <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'space-between', gap:10 }}>
         <div className="pv-chips">
@@ -2913,10 +3207,10 @@ function Notes({ rows, onSaved }) {
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
       <div className="pv-stats">
-        <article className="pv-kpi"><p>{t('Taarifa')}</p><p>{rows.length}</p></article>
+        <article className="pv-kpi"><p>{t('Taarifa')}</p><p>{marks(rows.length)}</p></article>
         <article className="pv-kpi pv-kpi-warn"><p>{t('Hazijasomwa')}</p><p>{fresh}</p></article>
-        <article className="pv-kpi"><p>{t('Zimesomwa')}</p><p>{rows.length-fresh}</p></article>
-        <article className="pv-kpi"><p>{t('Aina')}</p><p>{kinds.length}</p></article>
+        <article className="pv-kpi"><p>{t('Zimesomwa')}</p><p>{marks(rows.length-fresh)}</p></article>
+        <article className="pv-kpi"><p>{t('Aina')}</p><p>{marks(kinds.length)}</p></article>
       </div>
       <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'space-between', gap:10 }}>
         <div className="pv-chips">
@@ -2993,10 +3287,10 @@ function Staff({ rows, onSaved }) {
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
       <div className="pv-stats">
-        <article className="pv-kpi"><p>{t('Wafanyakazi')}</p><p>{rows.length}</p></article>
+        <article className="pv-kpi"><p>{t('Wafanyakazi')}</p><p>{marks(rows.length)}</p></article>
         <article className="pv-kpi pv-kpi-green"><p>{t('Hai')}</p><p>{live}</p></article>
-        <article className="pv-kpi"><p>{t('Amesimama')}</p><p>{rows.length-live}</p></article>
-        <article className="pv-kpi"><p>{t('Mmiliki')}</p><p>{rows.filter((r)=>r.role==='OWNER').length}</p></article>
+        <article className="pv-kpi"><p>{t('Amesimama')}</p><p>{marks(rows.length-live)}</p></article>
+        <article className="pv-kpi"><p>{t('Mmiliki')}</p><p>{marks(rows.filter((r)=>r.role==='OWNER').length)}</p></article>
       </div>
       {error && <Warn>{error}</Warn>}
       <form style={{ display:'grid', gridTemplateColumns:'1fr 8rem auto', gap:10 }}
@@ -3040,7 +3334,7 @@ function Staff({ rows, onSaved }) {
                         </label>
                       )}
                     </td>
-                    <td>{row.role==='OWNER' ? PERMS.length : `${granted}/${PERMS.length}`}</td>
+                    <td>{marks(row.role==='OWNER' ? PERMS.length : `${granted}/${PERMS.length}`)}</td>
                     <td>
                       {row.role!=='OWNER' && (
                         <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
@@ -3337,12 +3631,12 @@ function KindTab({ children, active, onClick, secondary }) {
 function SearchBox({ value, onChange, placeholder }) {
   return (
     <div style={{ position:'relative' }}>
-      <Search size={14} style={{ position:'absolute', left:11, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)', pointerEvents:'none' }} />
+      <Search size={14} style={{ position:'absolute', insetInlineStart:11, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)', pointerEvents:'none' }} />
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        style={{ ...inputSx, paddingLeft:34, minWidth:220 }}
+        style={{ ...inputSx, paddingInlineStart:34, minWidth:220 }}
       />
     </div>
   );
@@ -3425,7 +3719,7 @@ function Table({ heads, rows, onOpen, empty }) {
 ══════════════════════════════════════════════════════════════════ */
 function List({ rows, empty }) {
   const t = useT();
-  if (!rows.length) return <p style={{ fontSize:14, color:'var(--text-secondary)', padding:'24px 0' }}>{empty}</p>;
+  if (!rows.length) return <p style={{ fontSize:14, color:'var(--text-secondary)', padding:'24px 0' }}>{t(empty)}</p>;
   return (
     <div style={{ background:'var(--bg-card)', border:'1px solid var(--border-subtle)', borderRadius:14, overflow:'hidden' }}>
       {rows.map((row) => (

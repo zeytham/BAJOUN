@@ -32,7 +32,9 @@ class ReportsPage extends StatelessWidget {
       if (store.seeStock) _Report('Stoo ndogo', () async => store.csvLowStock()),
       if (store.isOwner) _Report('Mwendo wa stoo', store.csvMoves, dateColumn: 0),
     ];
-    return Scaffold(
+    return ListenableBuilder(
+      listenable: Lang.i,
+      builder: (context, _) => Scaffold(
       backgroundColor: skyPage,
       appBar: AppBar(title: Text(tx('Ripoti', 'Reports'), style: const TextStyle(fontWeight: FontWeight.w600))),
       body: ListView.separated(
@@ -66,6 +68,7 @@ class ReportsPage extends StatelessWidget {
           );
         },
       ),
+    ),
     );
   }
 }
@@ -89,7 +92,14 @@ class _ReportViewState extends State<_ReportView> {
   @override
   void initState() {
     super.initState();
+    Lang.i.addListener(_load);
     _load();
+  }
+
+  @override
+  void dispose() {
+    Lang.i.removeListener(_load);
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -128,7 +138,9 @@ class _ReportViewState extends State<_ReportView> {
     final raw = _rows.length < 2 ? const <List<String>>[] : _rows.sublist(1);
     final filtered = widget.report.dateColumn >= 0 || widget.report.debt;
     final body = filtered ? raw.where(_keep).toList() : raw;
-    return Scaffold(
+    return ListenableBuilder(
+      listenable: Lang.i,
+      builder: (context, _) => Scaffold(
       backgroundColor: skyPage,
       appBar: AppBar(
         title: Text(t(widget.report.title), style: const TextStyle(fontWeight: FontWeight.w600)),
@@ -170,6 +182,7 @@ class _ReportViewState extends State<_ReportView> {
                 ),
               ],
             ),
+    ),
     );
   }
 

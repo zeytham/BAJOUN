@@ -24,8 +24,16 @@ String tx(String sw, String en) {
   return sw;
 }
 
+final _fold = <String, Phrase>{};
+void _fillFold() {
+  for (final entry in lexicon.entries) {
+    _fold.putIfAbsent(entry.key.toLowerCase(), () => entry.value);
+  }
+}
+
 String t(String sw) {
-  final row = lexicon[sw];
+  if (_fold.isEmpty) _fillFold();
+  final row = lexicon[sw] ?? _fold[sw.toLowerCase()];
   if (row == null || Lang.i.code == 'sw') return sw;
   return Lang.i.arabic ? row.ar : row.en;
 }
@@ -35,7 +43,17 @@ String tf(String sw, List<Object?> args) {
   for (var i = 0; i < args.length; i++) {
     text = text.replaceAll('{$i}', '${args[i]}');
   }
-  return text;
+  if (!Lang.i.arabic) return text;
+  const arabic = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+  final buffer = StringBuffer();
+  for (final unit in text.codeUnits) {
+    if (unit >= 48 && unit <= 57) {
+      buffer.write(arabic[unit - 48]);
+    } else {
+      buffer.writeCharCode(unit);
+    }
+  }
+  return buffer.toString();
 }
 
 String sourceOf(String message) {

@@ -323,7 +323,7 @@ export async function takeWing(req, res) {
     if (!Array.isArray(vault.wing_items)) vault.wing_items = [];
     vault.wings.push({ id, person_name: person, person_phone: phone, note: String(req.body?.note || '').slice(0, 80), status: 'OUT', taken_at: new Date().toISOString(), returned_at: '', staff_name: actor(req) });
     for (const line of chosen) {
-      vault.wing_items.push({ id: freshId(), wing_id: id, name: line.name, qty: line.qty, returned_qty: 0, product_id: line.product?.id || '', phone_id: line.phone?.id || '' });
+      vault.wing_items.push({ id: freshId(), wing_id: id, name: line.name, qty: line.qty, returned_qty: 0, sold_qty: 0, price: 0, sale_id: '', product_id: line.product?.id || '', phone_id: line.phone?.id || '' });
       if (line.phone) line.phone.status = 'WING';
       else {
         line.product.stock = num(line.product.stock) - line.qty;

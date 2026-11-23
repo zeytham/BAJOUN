@@ -7,6 +7,7 @@ import backupRoutes from './routes/backup.routes.js';
 import syncRoutes from './routes/sync.routes.js';
 import exportRoutes from './routes/export.routes.js';
 import { startShopJobs } from './jobs/shop.job.js';
+import { snapshotVault } from './services/vaultReplica.service.js';
 import { upgradePlainPins } from './services/pin.service.js';
 import { syncStatus } from './services/cloudSync.service.js';
 
@@ -85,6 +86,7 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
   startShopJobs();
+  snapshotVault();
   ensureDeskUser().catch((error) => console.error('Desk account check failed:', error.message));
   seedDefaultCustomers().catch((error) => console.error('Customer seed failed:', error.message));
   upgradePlainPins().catch((error) => console.error('PIN hash upgrade failed:', error.message));

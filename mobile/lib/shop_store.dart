@@ -989,10 +989,16 @@ class ShopStore extends ChangeNotifier {
     for (final wing in wings.where((row) => row['status'] == 'OUT')) {
       final kind = 'WINGHOUR:${wing['id']}:$stamp';
       if (await db.hasNote(kind)) continue;
-      final names = wingItems.where((row) => row['wing_id'] == wing['id'] && asInt(row['qty']) > asInt(row['returned_qty'])).map((row) => '${row['name']} x${asInt(row['qty']) - asInt(row['returned_qty'])}').join(', ');
+      final names = wingItems.where((row) {
+        final holding = asInt(row['qty']) - asInt(row['returned_qty']) - asInt(row['sold_qty']);
+        return row['wing_id'] == wing['id'] && holding > 0;
+      }).map((row) => '${row['name']} x${asInt(row['qty']) - asInt(row['returned_qty']) - asInt(row['sold_qty'])}').join(', ');
+      final soldOpen = wingItems.any((row) => row['wing_id'] == wing['id'] && asInt(row['sold_qty']) > 0);
       await db.addNote(
         title: 'Mawinga bado nje',
-        body: '${wing['person_name']} haja rudisha${names.isEmpty ? '' : ': $names'}.',
+        body: names.isEmpty
+            ? (soldOpen ? '${wing['person_name']} haja maliza malipo.' : '${wing['person_name']} bado nje.')
+            : '${wing['person_name']} haja rudisha: $names.',
         kind: kind,
       );
       added = true;
@@ -2274,6 +2280,41 @@ class ShopStore extends ChangeNotifier {
   }) async {
     if (session == null) return 'Ingia kwanza.';
     final error = await db.takeWing(person: person, phone: phone, note: note, staff: session!.name, picks: picks);
+    if (error != null) return error;
+    await load();
+    syncShop();
+    return null;
+  }
+
+  Future<String?> sellWing({
+    required String wingId,
+    required Map<String, int> qtyByItem,
+    required Map<String, double> priceByItem,
+    required String method,
+    required double paidNow,
+    required String lipaRef,
+    required int termDays,
+    String termUnit = 'SIKU',
+    String person = '',
+    String phone = '',
+  }) async {
+    if (session == null) return 'Ingia kwanza.';
+    final owing = method == 'DENI' || paidNow + 0.5 < priceByItem.entries.fold<double>(0, (sum, entry) => sum + entry.value * (qtyByItem[entry.key] ?? 0));
+    if (owing && !seeDebts) return 'Huna ruhusa ya madeni.';
+    if (method == 'LIPA' && paidNow > 0 && lipaNumber.trim().isEmpty) return 'Weka Lipa Namba kwenye mipangilio kwanza.';
+    final error = await db.sellWing(
+      wingId: wingId,
+      staff: session!.name,
+      qtyByItem: qtyByItem,
+      priceByItem: priceByItem,
+      method: method,
+      paidNow: paidNow,
+      lipaRef: lipaRef,
+      termDays: termDays,
+      personName: person,
+      personPhone: phone,
+      termUnit: termUnit,
+    );
     if (error != null) return error;
     await load();
     syncShop();

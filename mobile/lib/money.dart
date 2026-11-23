@@ -8,13 +8,29 @@ bool isTzPhone(String raw) {
 String showPhone(String raw) {
   final digits = raw.replaceAll(RegExp(r'\D'), '');
   if (!isTzPhone(digits)) return raw.trim().isEmpty ? '' : raw.trim();
-  return '${digits.substring(0, 4)} ${digits.substring(4, 7)} ${digits.substring(7)}';
+  return marks('${digits.substring(0, 4)} ${digits.substring(4, 7)} ${digits.substring(7)}');
 }
 
 String? whatsappDigits(String raw) {
   final digits = raw.replaceAll(RegExp(r'\D'), '');
   if (!isTzPhone(digits)) return null;
   return '255${digits.substring(1)}';
+}
+
+const _arabicDigits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+
+String marks(Object? value) {
+  final text = '${value ?? ''}';
+  if (!Lang.i.arabic) return text;
+  final buffer = StringBuffer();
+  for (final unit in text.codeUnits) {
+    if (unit >= 48 && unit <= 57) {
+      buffer.write(_arabicDigits[unit - 48]);
+    } else {
+      buffer.writeCharCode(unit);
+    }
+  }
+  return buffer.toString();
 }
 
 String tsh(num value) {
@@ -24,7 +40,7 @@ String tsh(num value) {
     if (i > 0 && (digits.length - i) % 3 == 0) buffer.write(',');
     buffer.write(digits[i]);
   }
-  return 'TSH $buffer';
+  return marks('TSH $buffer');
 }
 
 String maskImei(String imei) {
@@ -56,7 +72,7 @@ String formatLive(DateTime date) {
   final local = date.toLocal();
   final hh = local.hour.toString().padLeft(2, '0');
   final mm = local.minute.toString().padLeft(2, '0');
-  return '${_weekdays[local.weekday - 1]}, ${local.day} ${_months[local.month - 1]} ${local.year} · $hh:$mm';
+  return marks('${_weekdays[local.weekday - 1]}, ${local.day} ${_months[local.month - 1]} ${local.year} · $hh:$mm');
 }
 
 String formatWhen(String? iso) {
@@ -64,10 +80,10 @@ String formatWhen(String? iso) {
   if (date == null) return '—';
   final hh = date.hour.toString().padLeft(2, '0');
   final mm = date.minute.toString().padLeft(2, '0');
-  return '${date.day} ${_months[date.month - 1]} ${date.year}, $hh:$mm';
+  return marks('${date.day} ${_months[date.month - 1]} ${date.year}, $hh:$mm');
 }
 
-String formatDay(DateTime date) => '${date.day} ${_months[date.month - 1]} ${date.year}';
+String formatDay(DateTime date) => marks('${date.day} ${_months[date.month - 1]} ${date.year}');
 
 String methodLabel(String? method) {
   switch (method) {
@@ -111,6 +127,19 @@ String debtTermWords(int days, String unit) {
     return months == 1 ? t('mwezi 1') : tf('miezi {0}', ['$months']);
   }
   return tf('siku {0}', ['$days']);
+}
+
+int debtLateDays(Map<String, Object?> debt) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final due = DateTime.tryParse('${debt['due_at']}')?.toLocal();
+  if (due != null) {
+    final days = today.difference(DateTime(due.year, due.month, due.day)).inDays;
+    return days < 0 ? 0 : days;
+  }
+  final opened = DateTime.tryParse('${debt['opened_at']}')?.toLocal();
+  if (opened == null) return 0;
+  return today.difference(DateTime(opened.year, opened.month, opened.day)).inDays;
 }
 
 String debtState(String? raw) {

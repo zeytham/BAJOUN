@@ -284,6 +284,7 @@ export async function getPhoneVaultShop(req, res) {
       floor: num(phone.floor_price) || num(phone.price),
       warrantyDays: num(phone.warranty_days) || num(phone.warranty_months) * 30,
       categoryId: phone.category_id || '',
+      arrived: phone.arrived_at || '',
     }));
 
     const goodsValue = stock.reduce((sum, product) => sum + product.price * product.stock, 0);
@@ -379,9 +380,16 @@ export async function getPhoneVaultShop(req, res) {
               name: item.name,
               qty: num(item.qty),
               back: num(item.returned_qty),
+              sold: num(item.sold_qty),
+              price: num(item.price),
+              saleId: item.sale_id || '',
               productId: item.product_id || '',
               phoneId: item.phone_id || '',
             })),
+          debts: [...new Set(wingItems.filter((item) => String(item.wing_id) === String(wing.id) && item.sale_id).map((item) => String(item.sale_id)))]
+            .map((saleId) => rows(vault, 'debts').find((row) => String(row.sale_id) === saleId && row.status === 'OPEN'))
+            .filter(Boolean)
+            .map((debt) => ({ id: debt.id, balance: num(debt.balance) })),
         })),
         faults: faults.map((fault) => ({
           id: fault.id,
@@ -469,6 +477,9 @@ function profitBook(vault, range) {
   const side = () => ({ sales: 0, cost: 0, returned: 0 });
   const phones = side();
   const goods = side();
+  const wingIds = new Set(rows(vault, 'wing_items').map((row) => String(row.sale_id || '')).filter(Boolean));
+  const wing = side();
+  const retail = side();
   let faultSales = 0;
   for (const item of rows(vault, 'sale_items')) {
     if (!open.has(String(item.sale_id))) continue;
@@ -477,8 +488,11 @@ function profitBook(vault, range) {
     if (num(item.faulty) === 1) faultSales += revenue;
     else {
       const bucket = phoneItem(item, types) ? phones : goods;
+      const channel = wingIds.has(String(item.sale_id)) ? wing : retail;
       bucket.sales += revenue;
       bucket.cost += cost;
+      channel.sales += revenue;
+      channel.cost += cost;
     }
   }
   const returns = new Map(rows(vault, 'returns').map((row) => [String(row.id), row]));
@@ -486,7 +500,9 @@ function profitBook(vault, range) {
     const parent = returns.get(String(item.return_id));
     if (!parent || !inside(parent.created_at, range)) continue;
     const bucket = phoneItem(item, types) ? phones : goods;
-    bucket.returned += num(item.price) * num(item.qty);
+    const back = num(item.price) * num(item.qty);
+    bucket.returned += back;
+    (wingIds.has(String(parent.sale_id)) ? wing : retail).returned += back;
   }
   let phoneFaults = 0;
   let goodsFaults = 0;
@@ -498,8 +514,10 @@ function profitBook(vault, range) {
   }
   phones.profit = phones.sales - phones.cost - phones.returned;
   goods.profit = goods.sales - goods.cost - goods.returned;
+  wing.profit = wing.sales - wing.cost - wing.returned;
+  retail.profit = retail.sales - retail.cost - retail.returned;
   const faultProfit = faultSales - phoneFaults - goodsFaults;
-  return { phones, goods, faultSales, phoneFaults, goodsFaults, faultProfit, shopProfit: phones.profit + goods.profit + faultProfit };
+  return { phones, goods, wing, retail, faultSales, phoneFaults, goodsFaults, faultProfit, shopProfit: phones.profit + goods.profit + faultProfit };
 }
 
 function cashierLines(vault, range) {
@@ -756,6 +774,7 @@ export async function createPhone(req, res) {
       warranty_months: 0,
       warranty_days: warranty,
       category_id: req.body?.categoryId || '',
+      arrived_at: new Date().toISOString(),
     });
     pushMove(vault, name, 1, 'MZIGO', req);
     if (req.body?.faulty) noteFault(vault, req, { name, qty: 1, cost, phoneId: vault.phone_units[vault.phone_units.length - 1].id });
@@ -927,7 +946,7 @@ export async function returnWing(req, res) {
     for (const pick of picks) {
       const item = items.find((row) => String(row.id) === pick.id);
       if (!item) return 'Bidhaa haipo kwenye mrengo.';
-      const left = num(item.qty) - num(item.returned_qty);
+      const left = num(item.qty) - num(item.returned_qty) - num(item.sold_qty);
       if (pick.qty > left) return `${item.name} imezidi idadi iliyo nje.`;
       chosen.push({ item, qty: pick.qty });
     }
@@ -946,14 +965,11 @@ export async function returnWing(req, res) {
       item.returned_qty = num(item.returned_qty) + qty;
     }
     const when = new Date().toISOString();
-    const stillRows = items.filter((row) => num(row.qty) > num(row.returned_qty));
-    if (!stillRows.length) {
-      wing.status = 'BACK';
-      wing.returned_at = when;
-    }
+    refreshWing(vault, wing, when);
+    const stillRows = items.filter((row) => num(row.qty) - num(row.returned_qty) - num(row.sold_qty) > 0);
     const who = String(wing.person_name || '');
     const came = chosen.map(({ item, qty }) => `${item.name} x${qty}`).join(', ');
-    const leftNames = stillRows.map((row) => `${row.name} x${num(row.qty) - num(row.returned_qty)}`).join(', ');
+    const leftNames = stillRows.map((row) => `${row.name} x${num(row.qty) - num(row.returned_qty) - num(row.sold_qty)}`).join(', ');
     const staff = String(req.user?.name || 'Mmiliki');
     const body = stillRows.length
       ? `${who} amerudisha ${came}. Bado nje: ${leftNames}. ${staff}.`
@@ -963,11 +979,146 @@ export async function returnWing(req, res) {
   }));
 }
 
+export async function sellWing(req, res) {
+  const method = req.body?.method === 'LIPA' || req.body?.method === 'DENI' ? req.body.method : 'CASH';
+  const lipaRef = String(req.body?.lipaRef || '').trim().slice(0, 40);
+  const termDays = Math.round(num(req.body?.termDays));
+  const termUnit = req.body?.termUnit === 'WIKI' || req.body?.termUnit === 'MWEZI' ? req.body.termUnit : 'SIKU';
+  const picks = (Array.isArray(req.body?.picks) ? req.body.picks : [])
+    .map((pick) => ({ id: String(pick.id || ''), qty: Math.round(num(pick.qty)), price: num(pick.price) }))
+    .filter((pick) => pick.qty > 0);
+  if (!picks.length) return res.status(400).json({ error: true, message: 'Chagua bidhaa aliyouza.' });
+  reply(res, await editVault(req, (vault) => {
+    const wing = rows(vault, 'wings').find((row) => String(row.id) === String(req.params.id));
+    if (!wing) return 'Rekodi haipo.';
+    if (wing.status !== 'OUT') return 'Mawinga haya yameshamalizika.';
+    const items = rows(vault, 'wing_items').filter((row) => String(row.wing_id) === String(wing.id));
+    const chosen = [];
+    for (const pick of picks) {
+      const item = items.find((row) => String(row.id) === pick.id);
+      if (!item) return 'Bidhaa haipo kwenye mrengo.';
+      const left = num(item.qty) - num(item.returned_qty) - num(item.sold_qty);
+      if (pick.qty > left) return `${item.name} imezidi idadi iliyo nje.`;
+      if (pick.price <= 0) return `Weka bei ya ${item.name}.`;
+      if (item.phone_id) {
+        const phone = rows(vault, 'phone_units').find((row) => String(row.id) === String(item.phone_id));
+        const floor = phone ? (num(phone.floor_price) || num(phone.price)) : 0;
+        if (phone && pick.price + 0.001 < floor) return `Bei ya ${item.name} iko chini ya sakafu.`;
+      }
+      chosen.push({ item, qty: pick.qty, price: pick.price });
+    }
+    const total = chosen.reduce((sum, line) => sum + line.price * line.qty, 0);
+    const handed = method === 'DENI' ? 0 : num(req.body?.amount);
+    if (handed < 0) return 'Kiasi si sahihi.';
+    const paying = method === 'LIPA' ? Math.min(handed, total) : handed;
+    const paid = Math.min(paying, total);
+    const lipa = String((rows(vault, 'meta').find((row) => row.key === 'lipa_namba') || {}).value || '');
+    if (method === 'LIPA' && paid > 0 && lipa.trim().length < 3) return 'Weka Lipa Namba kwenye mipangilio kwanza.';
+    if (method === 'LIPA' && paid > 0 && lipaRef.length < 3) return 'Weka kumbukumbu ya Lipa.';
+    if (method !== 'DENI' && paid <= 0) return 'Weka kiasi kilicholipwa, au chagua Deni zima.';
+    const balance = Math.max(0, total - paid);
+    const viewer = staffSession(req, vault);
+    if (viewer?.error) return viewer.error;
+    if (viewer && !viewer.perms.debts && balance > 0.5) return 'Huna ruhusa ya madeni.';
+    const typedName = String(req.body?.person || '').trim().slice(0, 60);
+    const typedPhone = String(req.body?.phone || '').replace(/\D/g, '');
+    if (typedName.length >= 2) wing.person_name = typedName;
+    if (/^0\d{9}$/.test(typedPhone)) wing.person_phone = typedPhone;
+    const person = String(wing.person_name || '').trim();
+    const phone = String(wing.person_phone || '').replace(/\D/g, '');
+    if (balance > 0.5 && (!/^0\d{9}$/.test(phone) || person.length < 2)) return 'Deni linahitaji jina na namba ya simu ya mteja.';
+    if (balance > 0.5 && (termDays < 1 || termDays > 3600)) return 'Weka siku anazokopa.';
+    const id = freshId();
+    const invoice = `INV-${new Date().getFullYear()}-${String(rows(vault, 'sales').length + 1).padStart(4, '0')}`;
+    const when = new Date().toISOString();
+    if (!Array.isArray(vault.sales)) vault.sales = [];
+    if (!Array.isArray(vault.sale_items)) vault.sale_items = [];
+    vault.sales.push({
+      id, invoice, customer_name: person, customer_phone: phone, total, paid, balance, change_due: method === 'CASH' ? Math.max(0, handed - total) : 0,
+      method, lipa_ref: lipaRef, cashier_id: '', cashier_name: req.user?.name || 'Mmiliki',
+      summary: chosen.map((line) => `${line.qty} ${line.item.name}`).join(', '),
+      created_at: when, voided: 0, returned: 0, sync_status: 'LOCAL',
+    });
+    for (const line of chosen) {
+      const phone = line.item.phone_id ? rows(vault, 'phone_units').find((row) => String(row.id) === String(line.item.phone_id)) : null;
+      const product = line.item.product_id ? rows(vault, 'products').find((row) => String(row.id) === String(line.item.product_id)) : null;
+      const categoryId = phone?.category_id || product?.category_id || '';
+      const category = rows(vault, 'categories').find((row) => String(row.id) === String(categoryId));
+      vault.sale_items.push({
+        id: freshId(), sale_id: id, name: line.item.name, qty: line.qty, price: line.price,
+        cost: num(phone?.cost ?? product?.cost), imei: phone?.imei || '', product_id: product?.id || '',
+        phone_id: phone?.id || '', warranty_months: 0, warranty_days: num(phone?.warranty_days ?? product?.warranty_days),
+        category_name: category?.name || '', faulty: 0,
+      });
+      if (phone) phone.status = 'SOLD';
+      const open = num(line.item.qty) - num(line.item.returned_qty) - num(line.item.sold_qty);
+      if (line.qty === open && num(line.item.sold_qty) === 0) {
+        line.item.sold_qty = line.qty;
+        line.item.price = line.price;
+        line.item.sale_id = id;
+      } else {
+        line.item.qty = num(line.item.qty) - line.qty;
+        vault.wing_items.push({
+          id: freshId(), wing_id: wing.id, name: line.item.name, qty: line.qty, returned_qty: 0,
+          sold_qty: line.qty, price: line.price, sale_id: id, product_id: line.item.product_id || '', phone_id: line.item.phone_id || '',
+        });
+      }
+    }
+    if (person && person !== 'Walk-in') {
+      if (!Array.isArray(vault.customers)) vault.customers = [];
+      let customer = vault.customers.find((row) => (phone.length >= 9 ? String(row.phone) === phone : String(row.name) === person));
+      if (!customer) {
+        customer = { id: freshId(), name: person, phone, spent: 0, created_at: when };
+        vault.customers.push(customer);
+      }
+      customer.spent = num(customer.spent) + total;
+    }
+    if (balance > 0.5) {
+      if (!Array.isArray(vault.debts)) vault.debts = [];
+      vault.debts.push({
+        id: freshId(), sale_id: id, customer_name: person, customer_phone: phone, principal: balance, balance,
+        opened_at: when, status: 'OPEN', due_at: new Date(Date.now() + termDays * 86400000).toISOString(),
+        term_days: termDays, term_unit: termUnit, last_reminded: '',
+      });
+      pushNote(vault, 'Deni jipya', `${person} anadaiwa TSH ${Math.round(balance)} kwenye ${invoice}.`, `DEBT:${id}`);
+    }
+    const payLabel = method === 'LIPA' ? 'Lipa Namba' : method === 'DENI' ? 'Deni' : 'Cash';
+    pushNote(vault, 'Mauzo ya mawinga', `${invoice} ${person} · ${req.user?.name || 'Mmiliki'} · ${payLabel}.`, `SALE:${id}`);
+    refreshWing(vault, wing, when);
+    return '';
+  }));
+}
+
+function refreshWing(vault, wing, when) {
+  const items = rows(vault, 'wing_items').filter((row) => String(row.wing_id) === String(wing.id));
+  const open = items.some((item) => {
+    if (num(item.qty) - num(item.returned_qty) - num(item.sold_qty) > 0) return true;
+    if (num(item.sold_qty) <= 0) return false;
+    const sale = rows(vault, 'sales').find((row) => String(row.id) === String(item.sale_id || ''));
+    return Boolean(sale) && num(sale.voided) !== 1 && num(sale.balance) > 0.5;
+  });
+  if (open) {
+    wing.status = 'OUT';
+    return;
+  }
+  wing.status = 'BACK';
+  if (!wing.returned_at) wing.returned_at = when;
+}
+
+function refreshWingsForSale(vault, saleId) {
+  const when = new Date().toISOString();
+  const ids = new Set(rows(vault, 'wing_items').filter((row) => String(row.sale_id || '') === String(saleId)).map((row) => String(row.wing_id)));
+  for (const id of ids) {
+    const wing = rows(vault, 'wings').find((row) => String(row.id) === id);
+    if (wing) refreshWing(vault, wing, when);
+  }
+}
+
 export async function dropWing(req, res) {
   reply(res, await editVault(req, (vault) => {
     const wing = rows(vault, 'wings').find((row) => String(row.id) === String(req.params.id));
     if (!wing) return 'Rekodi haipo.';
-    if (wing.status !== 'BACK') return 'Rudisha kwanza, kisha uondoe.';
+    if (wing.status !== 'BACK') return 'Maliza kwanza: arudishe bidhaa, au alipe alizouza.';
     vault.wing_items = rows(vault, 'wing_items').filter((row) => String(row.wing_id) !== String(wing.id));
     vault.wings = rows(vault, 'wings').filter((row) => String(row.id) !== String(wing.id));
     return '';
@@ -1016,6 +1167,7 @@ export async function payDebt(req, res) {
     if (sale) {
       sale.paid = num(sale.paid) + amount;
       sale.balance = Math.max(0, num(sale.total) - num(sale.paid));
+      refreshWingsForSale(vault, sale.id);
     }
     if (!Array.isArray(vault.notifications)) vault.notifications = [];
     vault.notifications.push({
@@ -1572,6 +1724,7 @@ function reportPack(vault, range, ledger) {
   const profitRows = [];
   const types = new Map(rows(vault, 'products').map((row) => [String(row.id), row.type]));
   const salesById = new Map(rows(vault, 'sales').map((sale) => [String(sale.id), sale]));
+  const wingSales = new Set(rows(vault, 'wing_items').map((row) => String(row.sale_id || '')).filter(Boolean));
   for (const item of rows(vault, 'sale_items')) {
     const sale = salesById.get(String(item.sale_id));
     if (!sale || num(sale.voided) === 1 || !inside(sale.created_at, range)) continue;
@@ -1579,12 +1732,13 @@ function reportPack(vault, range, ledger) {
     const fault = num(item.faulty) === 1;
     const gain = fault ? num(item.price) * qty : (num(item.price) - num(item.cost)) * qty;
     const kind = fault ? 'tatizo' : (item.phone_id || types.get(String(item.product_id || '')) === 'PHONE' ? 'simu' : 'kifaa');
-    profitRows.push([sale.created_at, sale.invoice, kind, item.name, qty, num(item.price), num(item.cost), gain]);
+    const channel = wingSales.has(String(item.sale_id)) ? 'mawinga' : 'rejareja';
+    profitRows.push([sale.created_at, sale.invoice, kind, item.name, qty, num(item.price), num(item.cost), gain, channel]);
   }
   const low = rows(vault, 'products').filter((row) => num(row.active) !== 0 && num(row.stock) <= num(row.reorder_level));
   const moves = rows(vault, 'stock_moves').filter((row) => inside(row.created_at, range));
   return {
-    faida: { heads: ['Tarehe', 'Risiti', 'Aina', 'Bidhaa', 'Idadi', 'Bei', 'Gharama', 'Faida'], rows: profitRows },
+    faida: { heads: ['Tarehe', 'Risiti', 'Aina', 'Bidhaa', 'Idadi', 'Bei', 'Gharama', 'Faida', 'Njia'], rows: profitRows },
     mauzo: { heads: ['Risiti', 'Tarehe', 'Mteja', 'Simu', 'Jumla', 'Yamelipwa', 'Deni', 'Njia', 'Muuzaji'], rows: ledger.map((sale) => [sale.invoice, sale.at, sale.customer, sale.phone, sale.total, sale.paid, sale.balance, sale.method, sale.cashier]) },
     madeni: { heads: ['Mteja', 'Simu', 'Siku', 'Kilichokopwa', 'Baki', 'Hali'], rows: rows(vault, 'debts').map((debt) => [debt.customer_name, debt.customer_phone, debt.opened_at, num(debt.principal), num(debt.balance), debt.status]) },
     stoo: { heads: ['Aina', 'Jina', 'Bei', 'Gharama', 'Stoo', 'Msimbo'], rows: rows(vault, 'products').filter((row) => num(row.active) !== 0).map((row) => [row.type, row.name, num(row.price), num(row.cost), num(row.stock), row.barcode || '']) },

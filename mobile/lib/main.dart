@@ -250,7 +250,7 @@ class _PinGateState extends State<PinGate> with TickerProviderStateMixin {
               child: Column(
                 children: [
                   Align(
-                    alignment: Alignment.centerLeft,
+                    alignment: AlignmentDirectional.centerStart,
                     child: LangDots(
                       current: widget.store.lang,
                       onPick: widget.store.setLanguage,
@@ -259,7 +259,7 @@ class _PinGateState extends State<PinGate> with TickerProviderStateMixin {
                   ),
                   if (_creating && _ownerForm)
                     Align(
-                      alignment: Alignment.centerLeft,
+                      alignment: AlignmentDirectional.centerStart,
                       child: TextButton.icon(
                         onPressed: _working ? null : _stepBack,
                         icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -736,6 +736,7 @@ class _ShopShellState extends State<ShopShell> with WidgetsBindingObserver {
   int _tab = 0;
   Timer? _idle;
   Timer? _wings;
+  Timer? _copy;
   DateTime? _awayAt;
   final _sellKey = GlobalKey<SellPageState>();
   bool _sellFiltered = false;
@@ -752,6 +753,7 @@ class _ShopShellState extends State<ShopShell> with WidgetsBindingObserver {
     widget.store.lastTouch = DateTime.now();
     _armIdle();
     _wings = Timer.periodic(const Duration(hours: 1), (_) => widget.store.remindOpenWings());
+    _copy = Timer.periodic(const Duration(minutes: 3), (_) => widget.store.pullShop());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _autoRemind();
       widget.store.remindOpenWings();
@@ -763,6 +765,7 @@ class _ShopShellState extends State<ShopShell> with WidgetsBindingObserver {
     if (widget.store.showTill == _showTill) widget.store.showTill = null;
     _idle?.cancel();
     _wings?.cancel();
+    _copy?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -821,6 +824,7 @@ class _ShopShellState extends State<ShopShell> with WidgetsBindingObserver {
       _armIdle();
       _autoRemind();
       widget.store.remindOpenWings();
+      widget.store.pullShop();
     }
   }
 

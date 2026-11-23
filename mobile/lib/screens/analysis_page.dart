@@ -161,6 +161,31 @@ class _AnalysisPageState extends State<AnalysisPage> {
                       ),
               ),
               const SizedBox(height: 12),
+              if (mixTotal > 0)
+                _panel(
+                  t('Malipo'),
+                  Column(
+                    children: [
+                      SizedBox(
+                        height: 180,
+                        child: PieChart(
+                          PieChartData(
+                            sectionsSpace: 2,
+                            centerSpaceRadius: 42,
+                            sections: [
+                              if (books.cash > 0) PieChartSectionData(value: books.cash, color: skyDeep, title: '', radius: 52),
+                              if (books.lipa > 0) PieChartSectionData(value: books.lipa, color: const Color(0xFF1F5C28), title: '', radius: 46),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _stat(t('Cash'), tsh(books.cash)),
+                      _stat(t('Lipa Namba'), tsh(books.lipa)),
+                    ],
+                  ),
+                ),
+              if (mixTotal > 0) const SizedBox(height: 12),
               _panel(
                 t('Cash na Lipa Namba'),
                 Column(
@@ -175,6 +200,8 @@ class _AnalysisPageState extends State<AnalysisPage> {
                 ),
               ),
               const SizedBox(height: 12),
+              if (store.seeCost) _profitBars(book),
+              if (store.seeCost) const SizedBox(height: 12),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
@@ -230,13 +257,74 @@ class _AnalysisPageState extends State<AnalysisPage> {
                 Text(card.$1, style: captionStyle),
                 FittedBox(
                   fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
+                  alignment: AlignmentDirectional.centerStart,
                   child: Text(card.$2, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18, color: ink)),
                 ),
               ],
             ),
           ),
       ],
+    );
+  }
+
+  Widget _profitBars(ShopLedger book) {
+    final values = [book.phoneProfit, book.goodsProfit, book.faultProfit];
+    final peak = values.fold<double>(0, (top, value) => value.abs() > top ? value.abs() : top);
+    final labels = [t('Simu'), t('Vifaa'), t('Matatizo')];
+    return _panel(
+      t('Faida kwa aina'),
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            height: 180,
+            child: BarChart(
+              BarChartData(
+                alignment: BarChartAlignment.spaceAround,
+                minY: peak == 0 ? 0 : -peak * 1.2,
+                maxY: peak == 0 ? 1 : peak * 1.2,
+                gridData: const FlGridData(show: false),
+                borderData: FlBorderData(show: false),
+                titlesData: FlTitlesData(
+                  leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 28,
+                      getTitlesWidget: (value, meta) {
+                        final index = value.toInt();
+                        if (index < 0 || index >= labels.length) return const SizedBox.shrink();
+                        return Text(labels[index], style: const TextStyle(fontSize: 11, color: muted));
+                      },
+                    ),
+                  ),
+                ),
+                barGroups: [
+                  for (var i = 0; i < values.length; i++)
+                    BarChartGroupData(
+                      x: i,
+                      barRods: [
+                        BarChartRodData(
+                          toY: values[i],
+                          width: 22,
+                          borderRadius: BorderRadius.circular(8),
+                          color: values[i] < 0 ? const Color(0xFFB45309) : skyDeep,
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          _stat(t('Faida ya simu'), tsh(book.phoneProfit)),
+          _stat(t('Faida ya vifaa'), tsh(book.goodsProfit)),
+          _stat(t('Faida ya matatizo'), tsh(book.faultProfit)),
+          _stat(t('Faida ya duka'), tsh(book.shopProfit)),
+        ],
+      ),
     );
   }
 

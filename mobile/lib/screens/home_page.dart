@@ -61,6 +61,24 @@ class HomePage extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 16),
+              if (store.phones.any((row) => row['status'] == 'IN_STOCK' && _satLong(row)))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(color: const Color(0xFFFFF8EF), borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0xFFF3D7B0))),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(t('Simu zimekaa'), style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFFB45309))),
+                        const SizedBox(height: 6),
+                        for (final phone in store.phones.where((row) => row['status'] == 'IN_STOCK' && _satLong(row)))
+                          Text('${phone['product_name']} · ${tf('siku {0}', ['${_satDays(phone)}'])}', style: const TextStyle(color: ink)),
+                      ],
+                    ),
+                  ),
+                ),
               LayoutBuilder(
                 builder: (context, constraints) {
                   final actions = <(IconData, String, VoidCallback)>[
@@ -342,3 +360,11 @@ class _SensitiveCard extends StatelessWidget {
     );
   }
 }
+
+int _satDays(Map<String, Object?> phone) {
+  final at = DateTime.tryParse('${phone['arrived_at']}');
+  if (at == null) return 0;
+  return DateTime.now().difference(at).inDays;
+}
+
+bool _satLong(Map<String, Object?> phone) => _satDays(phone) >= 60;

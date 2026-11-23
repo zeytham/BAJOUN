@@ -46,7 +46,7 @@ class ChoiceRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
       child: Align(
-        alignment: Alignment.centerLeft,
+        alignment: AlignmentDirectional.centerStart,
         child: Wrap(
           spacing: 8,
           runSpacing: 8,

@@ -142,24 +142,22 @@ export function mergeVault(current, incoming) {
   });
   merged.faults = union(list(left, 'faults'), list(right, 'faults'), (a, b) => ({ ...(a || {}), ...(b || {}) }));
   merged.wing_items = union(list(left, 'wing_items'), list(right, 'wing_items'), (a, b) => {
-    if (!a) return { ...b };
-    if (!b) return { ...a };
+    if (!a) return { ...b, sold_qty: num(b.sold_qty), price: num(b.price), sale_id: b.sale_id || '' };
+    if (!b) return { ...a, sold_qty: num(a.sold_qty), price: num(a.price), sale_id: a.sale_id || '' };
     const qty = Math.max(num(a.qty), num(b.qty));
     const back = Math.min(qty, Math.max(num(a.returned_qty), num(b.returned_qty)));
-    return { ...a, ...b, qty, returned_qty: back };
+    const sold = Math.min(Math.max(0, qty - back), Math.max(num(a.sold_qty), num(b.sold_qty)));
+    return { ...a, ...b, qty, returned_qty: back, sold_qty: sold, price: num(b.price) || num(a.price), sale_id: b.sale_id || a.sale_id || '' };
   });
   merged.wings = union(list(left, 'wings'), list(right, 'wings'), (a, b) => {
     if (!a) return { ...b };
     if (!b) return { ...a };
-    const back = a.status === 'BACK' || b.status === 'BACK';
     const returned = String(a.returned_at || '') > String(b.returned_at || '') ? a.returned_at : b.returned_at;
-    return { ...a, ...b, status: back ? 'BACK' : 'OUT', returned_at: returned || '' };
+    return { ...a, ...b, returned_at: returned || '' };
   });
   const loaned = new Set();
-  const wingById = new Map(merged.wings.map((wing) => [String(wing.id), wing]));
   for (const item of merged.wing_items) {
-    const wing = wingById.get(String(item.wing_id));
-    if (wing && wing.status === 'OUT' && item.phone_id && num(item.returned_qty) < num(item.qty)) loaned.add(String(item.phone_id));
+    if (item.phone_id && num(item.returned_qty) + num(item.sold_qty) < num(item.qty)) loaned.add(String(item.phone_id));
   }
   merged.phone_units = merged.phone_units.map((phone) => {
     if (phone.status === 'SOLD') return phone;
@@ -213,6 +211,18 @@ export function mergeVault(current, incoming) {
     const balance = num(debt.balance);
     return { ...sale, balance };
   });
+  for (const wing of merged.wings) {
+    const items = merged.wing_items.filter((item) => String(item.wing_id) === String(wing.id));
+    if (!items.length) continue;
+    const open = items.some((item) => {
+      if (num(item.qty) - num(item.returned_qty) - num(item.sold_qty) > 0) return true;
+      if (num(item.sold_qty) <= 0) return false;
+      const sale = merged.sales.find((row) => String(row.id) === String(item.sale_id || ''));
+      return Boolean(sale) && num(sale.voided) !== 1 && num(sale.balance) > 0.5;
+    });
+    wing.status = open ? 'OUT' : 'BACK';
+    if (!open && !wing.returned_at) wing.returned_at = new Date().toISOString();
+  }
 
   const spent = new Map();
   for (const sale of merged.sales) {

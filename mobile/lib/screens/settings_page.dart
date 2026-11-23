@@ -278,7 +278,7 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
                   ),
                   if (store.shopLogo != null)
                     Align(
-                      alignment: Alignment.centerLeft,
+                      alignment: AlignmentDirectional.centerStart,
                       child: TextButton(onPressed: _busy ? null : _clearLogo, child: Text(tx('Ondoa logo', 'Remove logo'))),
                     ),
                 ],
@@ -338,7 +338,7 @@ class _SettingsPageState extends State<SettingsPage> with WidgetsBindingObserver
                   label: store.myPhoto == null ? tx('Weka picha yangu', 'Add my photo') : tx('Badilisha picha yangu', 'Change my photo'),
                 ),
                 Align(
-                  alignment: Alignment.centerLeft,
+                  alignment: AlignmentDirectional.centerStart,
                   child: Wrap(
                     spacing: 4,
                     children: [

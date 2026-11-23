@@ -14,6 +14,7 @@ import {
   hideSale,
   returnSale,
   returnWing,
+  sellWing,
   dropWing,
   voidSale,
   patchStaff,
@@ -91,6 +92,7 @@ router.patch('/sales/:id', owner, patchSale);
 router.post('/sales/:id/return', owner, returnSale);
 router.post('/sales/:id/void', owner, voidSale);
 router.post('/sales/:id/hide', owner, hideSale);
+router.post('/wings/:id/sell', owner, sellWing);
 router.post('/wings/:id/return', owner, returnWing);
 router.delete('/wings/:id', owner, dropWing);
 router.patch('/customers/:id', owner, patchCustomer);

@@ -21,7 +21,7 @@ class ShopDb {
   static Future<Database> _openFile(String file) {
     return openDatabase(
       file,
-      version: 14,
+      version: 16,
       onCreate: (db, version) async {
         await _create(db);
         await _seed(db);
@@ -51,6 +51,12 @@ class ShopDb {
           await _addColumn(db, 'products', 'screen', "TEXT NOT NULL DEFAULT ''");
           await _addColumn(db, 'products', 'condition', "TEXT NOT NULL DEFAULT ''");
         }
+        if (oldVersion < 15) {
+          await _addColumn(db, 'wing_items', 'sold_qty', 'INTEGER NOT NULL DEFAULT 0');
+          await _addColumn(db, 'wing_items', 'price', 'REAL NOT NULL DEFAULT 0');
+          await _addColumn(db, 'wing_items', 'sale_id', "TEXT NOT NULL DEFAULT ''");
+        }
+        if (oldVersion < 16) await _addColumn(db, 'phone_units', 'arrived_at', "TEXT NOT NULL DEFAULT ''");
       },
     );
   }
@@ -85,7 +91,7 @@ class ShopDb {
       final tables = await probe.rawQuery("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'sales'");
       if (tables.isEmpty) return 'Faili hii si nakala ya PhoneVault.';
       final version = await probe.getVersion();
-      if (version > 14) return 'Nakala hii inatoka kwenye toleo jipya. Sasisha app kwanza.';
+      if (version > 16) return 'Nakala hii inatoka kwenye toleo jipya. Sasisha app kwanza.';
     } catch (_) {
       return 'Faili hii si nakala ya PhoneVault.';
     } finally {
@@ -242,6 +248,7 @@ class ShopDb {
             values['kind'] = values['id'] == 'phones' ? 'phone' : 'goods';
           }
           if (table == 'phone_units' && values['category_id'] == null) values['category_id'] = '';
+          if (table == 'phone_units') values['arrived_at'] ??= '';
           if (table == 'products') {
             values['warranty_days'] ??= 0;
             values['fault_qty'] ??= 0;
@@ -255,7 +262,12 @@ class ShopDb {
           }
           if (table == 'return_items') values['faulty'] ??= 0;
           if (table == 'wings') values['returned_at'] ??= '';
-          if (table == 'wing_items') values['returned_qty'] ??= 0;
+          if (table == 'wing_items') {
+            values['returned_qty'] ??= 0;
+            values['sold_qty'] ??= 0;
+            values['price'] ??= 0;
+            values['sale_id'] ??= '';
+          }
           await txn.insert(table, values);
         }
       }
@@ -682,7 +694,12 @@ class ShopDb {
     };
     if (id == null) {
       final phoneId = _id();
-      await db.insert('phone_units', {'id': phoneId, 'status': faulty ? 'FAULTY' : 'IN_STOCK', ...values});
+      await db.insert('phone_units', {
+        'id': phoneId,
+        'status': faulty ? 'FAULTY' : 'IN_STOCK',
+        'arrived_at': DateTime.now().toIso8601String(),
+        ...values,
+      });
       await recordMove(name: clean, delta: 1, reason: 'MZIGO', staff: actor);
       if (faulty) await _fault(db, name: clean, qty: 1, cost: cost, source: 'MPYA', phoneId: phoneId, staff: actor, note: '');
     } else {
@@ -904,6 +921,10 @@ class ShopDb {
             'balance': max(0, total - paid),
           }, where: 'id = ?', whereArgs: [saleId]);
         }
+        final links = await txn.query('wing_items', where: 'sale_id = ?', whereArgs: [saleId]);
+        for (final wingId in links.map((row) => '${row['wing_id']}').toSet()) {
+          await _finishWing(txn, wingId);
+        }
       }
       await _note(
         txn,
@@ -914,6 +935,214 @@ class ShopDb {
     });
     await bumpRevision();
     return null;
+  }
+
+  Future<bool> _wingOwes(DatabaseExecutor txn, List<Map<String, Object?>> items) async {
+    for (final item in items) {
+      if (asInt(item['sold_qty']) <= 0) continue;
+      final saleId = '${item['sale_id'] ?? ''}';
+      if (saleId.isEmpty) continue;
+      final sales = await txn.query('sales', where: 'id = ?', whereArgs: [saleId]);
+      if (sales.isEmpty || asInt(sales.first['voided']) == 1) continue;
+      if (asDouble(sales.first['balance']) > 0.5) return true;
+    }
+    return false;
+  }
+
+  Future<void> _finishWing(DatabaseExecutor txn, String wingId) async {
+    final items = await txn.query('wing_items', where: 'wing_id = ?', whereArgs: [wingId]);
+    final holding = items.any((row) => asInt(row['qty']) > asInt(row['returned_qty']) + asInt(row['sold_qty']));
+    final owing = await _wingOwes(txn, items);
+    if (holding || owing) return;
+    final rows = await txn.query('wings', where: 'id = ?', whereArgs: [wingId]);
+    if (rows.isEmpty || rows.first['status'] == 'BACK') return;
+    await txn.update('wings', {
+      'status': 'BACK',
+      'returned_at': DateTime.now().toIso8601String(),
+    }, where: 'id = ?', whereArgs: [wingId]);
+  }
+
+  Future<String?> sellWing({
+    required String wingId,
+    required String staff,
+    required Map<String, int> qtyByItem,
+    required Map<String, double> priceByItem,
+    required String method,
+    required double paidNow,
+    required String lipaRef,
+    required int termDays,
+    String personName = '',
+    String personPhone = '',
+    String termUnit = 'SIKU',
+  }) async {
+    if (method != 'CASH' && method != 'LIPA' && method != 'DENI') return 'Chagua aina ya malipo.';
+    final wings = await db.query('wings', where: 'id = ?', whereArgs: [wingId]);
+    if (wings.isEmpty) return 'Rekodi haipo.';
+    if (wings.first['status'] != 'OUT') return 'Mawinga haya yameshamalizika.';
+    final items = await db.query('wing_items', where: 'wing_id = ?', whereArgs: [wingId]);
+    final chosen = <Map<String, Object?>>[];
+    for (final item in items) {
+      final want = qtyByItem['${item['id']}'] ?? 0;
+      if (want <= 0) continue;
+      final left = asInt(item['qty']) - asInt(item['returned_qty']) - asInt(item['sold_qty']);
+      if (want > left) return '${item['name']} imezidi idadi iliyo nje.';
+      final price = priceByItem['${item['id']}'] ?? 0;
+      if (price <= 0) return 'Weka bei ya ${item['name']}.';
+      final phoneId = '${item['phone_id'] ?? ''}';
+      if (phoneId.isNotEmpty) {
+        final units = await db.query('phone_units', where: 'id = ?', whereArgs: [phoneId]);
+        if (units.isNotEmpty) {
+          final floor = asDouble(units.first['floor_price']);
+          final base = floor > 0 ? floor : asDouble(units.first['price']);
+          if (price + 0.001 < base) return 'Bei ya ${item['name']} iko chini ya sakafu.';
+        }
+      }
+      chosen.add({...item, 'sell': want, 'ask': price});
+    }
+    if (chosen.isEmpty) return 'Chagua bidhaa aliyouza.';
+    final total = chosen.fold<double>(0, (sum, item) => sum + (item['ask'] as double) * (item['sell'] as int));
+    final handed = method == 'DENI' ? 0.0 : paidNow;
+    if (handed < 0 || handed > 100000000) return 'Kiasi si sahihi.';
+    final paying = method == 'LIPA' ? min(handed, total) : handed;
+    final paid = min(paying, total);
+    if (method == 'LIPA' && paid > 0 && lipaRef.trim().length < 3) return 'Weka kumbukumbu ya Lipa.';
+    if (method != 'DENI' && paid <= 0) return 'Weka kiasi kilicholipwa, au chagua Deni zima.';
+    final balance = max(0.0, total - paid);
+    final typedName = _plain(personName, 60);
+    final typedPhone = personPhone.replaceAll(RegExp(r'\D'), '');
+    final person = typedName.length >= 2 ? typedName : _plain('${wings.first['person_name']}', 60);
+    final phone = isTzPhone(typedPhone) ? typedPhone : '${wings.first['person_phone']}'.replaceAll(RegExp(r'\D'), '');
+    final unit = termUnit == 'WIKI' || termUnit == 'MWEZI' ? termUnit : 'SIKU';
+    if (balance > 0.5 && (!isTzPhone(phone) || person.length < 2)) {
+      return 'Deni linahitaji jina na namba ya simu ya mteja.';
+    }
+    if (balance > 0.5 && (termDays < 1 || termDays > 3600)) return 'Weka siku anazokopa.';
+    final number = await nextInvoiceNumber();
+    final invoice = 'INV-${DateTime.now().year}-${number.toString().padLeft(4, '0')}';
+    final saleId = _id();
+    final when = DateTime.now().toIso8601String();
+    try {
+      await db.transaction((txn) async {
+        await txn.update('wings', {
+          'person_name': person,
+          'person_phone': phone,
+        }, where: 'id = ?', whereArgs: [wingId]);
+        await txn.insert('sales', {
+          'id': saleId,
+          'invoice': invoice,
+          'customer_name': person,
+          'customer_phone': phone,
+          'total': total,
+          'paid': paid,
+          'balance': balance,
+          'change_due': method == 'CASH' ? max(0.0, handed - total) : 0,
+          'method': method,
+          'lipa_ref': _plain(lipaRef, 40),
+          'cashier_id': '',
+          'cashier_name': _plain(staff, 40),
+          'summary': chosen.map((item) => '${item['sell']} ${item['name']}').join(', '),
+          'created_at': when,
+          'voided': 0,
+          'sync_status': 'LOCAL',
+        });
+        for (final item in chosen) {
+          final count = item['sell'] as int;
+          final price = item['ask'] as double;
+          final phoneId = '${item['phone_id'] ?? ''}';
+          final productId = '${item['product_id'] ?? ''}';
+          var cost = 0.0;
+          var warranty = 0;
+          var category = '';
+          var imei = '';
+          if (phoneId.isNotEmpty) {
+            final units = await txn.query('phone_units', where: 'id = ?', whereArgs: [phoneId]);
+            if (units.isNotEmpty) {
+              cost = asDouble(units.first['cost']);
+              warranty = asInt(units.first['warranty_days']);
+              imei = '${units.first['imei'] ?? ''}';
+              final cats = await txn.query('categories', where: 'id = ?', whereArgs: [units.first['category_id']]);
+              category = cats.isEmpty ? '' : '${cats.first['name']}';
+              await txn.update('phone_units', {'status': 'SOLD'}, where: 'id = ?', whereArgs: [phoneId]);
+            }
+          } else if (productId.isNotEmpty) {
+            final products = await txn.query('products', where: 'id = ?', whereArgs: [productId]);
+            if (products.isNotEmpty) {
+              cost = asDouble(products.first['cost']);
+              warranty = asInt(products.first['warranty_days']);
+              final cats = await txn.query('categories', where: 'id = ?', whereArgs: [products.first['category_id']]);
+              category = cats.isEmpty ? '' : '${cats.first['name']}';
+            }
+          }
+          await txn.insert('sale_items', {
+            'id': _id(),
+            'sale_id': saleId,
+            'name': item['name'],
+            'qty': count,
+            'price': price,
+            'cost': cost,
+            'imei': imei,
+            'product_id': productId.isEmpty ? null : productId,
+            'phone_id': phoneId.isEmpty ? null : phoneId,
+            'warranty_months': 0,
+            'warranty_days': warranty,
+            'category_name': category,
+            'faulty': 0,
+          });
+          final open = asInt(item['qty']) - asInt(item['returned_qty']) - asInt(item['sold_qty']);
+          if (count == open && asInt(item['sold_qty']) == 0) {
+            await txn.update('wing_items', {
+              'sold_qty': count,
+              'price': price,
+              'sale_id': saleId,
+            }, where: 'id = ?', whereArgs: [item['id']]);
+          } else {
+            await txn.update('wing_items', {
+              'qty': asInt(item['qty']) - count,
+            }, where: 'id = ?', whereArgs: [item['id']]);
+            await txn.insert('wing_items', {
+              'id': _id(),
+              'wing_id': wingId,
+              'name': item['name'],
+              'qty': count,
+              'returned_qty': 0,
+              'sold_qty': count,
+              'price': price,
+              'sale_id': saleId,
+              'product_id': productId.isEmpty ? null : productId,
+              'phone_id': phoneId.isEmpty ? null : phoneId,
+            });
+          }
+        }
+        if (person != 'Walk-in') await _touchCustomer(txn, person, phone, total);
+        if (balance > 0.5) {
+          await txn.insert('debts', {
+            'id': _id(),
+            'sale_id': saleId,
+            'customer_name': person,
+            'customer_phone': phone,
+            'principal': balance,
+            'balance': balance,
+            'opened_at': when,
+            'status': 'OPEN',
+            'due_at': DateTime.now().add(Duration(days: termDays)).toIso8601String(),
+            'term_days': termDays,
+            'term_unit': unit,
+          });
+          await _note(txn, title: 'Deni jipya', body: '$person anadaiwa TSH ${balance.round()} kwenye $invoice.', kind: 'DEBT:$saleId');
+        }
+        await _note(
+          txn,
+          title: 'Mauzo ya mawinga',
+          body: '$invoice $person · ${_plain(staff, 40)} · ${methodLabel(method)}.',
+          kind: 'SALE:$saleId',
+        );
+        await _finishWing(txn, wingId);
+      });
+      await bumpRevision();
+      return null;
+    } on StateError catch (error) {
+      return error.message.toString();
+    }
   }
 
   Future<String?> voidSale(String saleId, {String actor = ''}) async {
@@ -1050,6 +1279,10 @@ class ShopDb {
             'wing_id': id,
             'name': _plain(pick.name, 80),
             'qty': pick.qty,
+            'returned_qty': 0,
+            'sold_qty': 0,
+            'price': 0,
+            'sale_id': '',
             'product_id': pick.productId,
             'phone_id': pick.phoneId,
           });
@@ -1078,7 +1311,7 @@ class ShopDb {
     for (final item in items) {
       final want = qtyByItem['${item['id']}'] ?? 0;
       if (want <= 0) continue;
-      final left = asInt(item['qty']) - asInt(item['returned_qty']);
+      final left = asInt(item['qty']) - asInt(item['returned_qty']) - asInt(item['sold_qty']);
       if (want > left) return '${item['name']} imezidi idadi iliyo nje.';
       chosen.add({...item, 'back': want});
     }
@@ -1103,16 +1336,17 @@ class ShopDb {
         await txn.rawUpdate('UPDATE wing_items SET returned_qty = returned_qty + ? WHERE id = ?', [want, item['id']]);
       }
       final fresh = await txn.query('wing_items', where: 'wing_id = ?', whereArgs: [wingId]);
-      final still = fresh.where((row) => asInt(row['qty']) > asInt(row['returned_qty'])).toList();
-      if (still.isEmpty) {
+      final still = fresh.where((row) => asInt(row['qty']) > asInt(row['returned_qty']) + asInt(row['sold_qty'])).toList();
+      final owing = await _wingOwes(txn, fresh);
+      if (still.isEmpty && !owing) {
         await txn.update('wings', {'status': 'BACK', 'returned_at': when}, where: 'id = ?', whereArgs: [wingId]);
       }
       final came = chosen.map((item) => '${item['name']} x${item['back']}').join(', ');
-      final leftNames = still.map((row) => '${row['name']} x${asInt(row['qty']) - asInt(row['returned_qty'])}').join(', ');
+      final leftNames = still.map((row) => '${row['name']} x${asInt(row['qty']) - asInt(row['returned_qty']) - asInt(row['sold_qty'])}').join(', ');
       final who = '${rows.first['person_name']}';
-      final body = still.isEmpty
+      final body = still.isEmpty && !owing
           ? '$who amerudisha $came. ${_plain(staff, 40)}.'
-          : '$who amerudisha $came. Bado nje: $leftNames. ${_plain(staff, 40)}.';
+          : '$who amerudisha $came. Bado nje: ${leftNames.isEmpty ? 'anadaiwa' : leftNames}. ${_plain(staff, 40)}.';
       await _note(txn, title: 'Mawinga yamerudi', body: body, kind: 'WINGBACK:$wingId:$when');
     });
     await bumpRevision();
@@ -1122,7 +1356,7 @@ class ShopDb {
   Future<String?> dropReturnedWing(String wingId) async {
     final rows = await db.query('wings', where: 'id = ?', whereArgs: [wingId]);
     if (rows.isEmpty) return 'Rekodi haipo.';
-    if (rows.first['status'] != 'BACK') return 'Rudisha kwanza, kisha uondoe.';
+    if (rows.first['status'] != 'BACK') return 'Maliza kwanza: arudishe bidhaa, au alipe alizouza.';
     await db.transaction((txn) async {
       await txn.delete('wing_items', where: 'wing_id = ?', whereArgs: [wingId]);
       await txn.delete('wings', where: 'id = ?', whereArgs: [wingId]);
@@ -1507,7 +1741,8 @@ Future<void> _create(Database db) async {
       status TEXT NOT NULL,
       warranty_months INTEGER NOT NULL,
       warranty_days INTEGER NOT NULL DEFAULT 0,
-      category_id TEXT NOT NULL DEFAULT ''
+      category_id TEXT NOT NULL DEFAULT '',
+      arrived_at TEXT NOT NULL DEFAULT ''
     )
   ''');
   await db.execute('''
@@ -1677,6 +1912,9 @@ Future<void> _create(Database db) async {
       name TEXT NOT NULL,
       qty INTEGER NOT NULL,
       returned_qty INTEGER NOT NULL DEFAULT 0,
+      sold_qty INTEGER NOT NULL DEFAULT 0,
+      price REAL NOT NULL DEFAULT 0,
+      sale_id TEXT NOT NULL DEFAULT '',
       product_id TEXT,
       phone_id TEXT
     )
@@ -1861,6 +2099,9 @@ Future<void> _upgradeBooks(Database db) async {
       name TEXT NOT NULL,
       qty INTEGER NOT NULL,
       returned_qty INTEGER NOT NULL DEFAULT 0,
+      sold_qty INTEGER NOT NULL DEFAULT 0,
+      price REAL NOT NULL DEFAULT 0,
+      sale_id TEXT NOT NULL DEFAULT '',
       product_id TEXT,
       phone_id TEXT
     )

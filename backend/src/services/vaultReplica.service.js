@@ -45,6 +45,24 @@ function wake(revision) {
   for (const finish of pending) finish(revision);
 }
 
+export function snapshotVault() {
+  keepShopCopy();
+}
+
+function keepShopCopy() {
+  try {
+    if (!fs.existsSync(file)) return;
+    const dir = path.join(path.dirname(file), 'vault-backups');
+    fs.mkdirSync(dir, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    fs.copyFileSync(file, path.join(dir, `vault-${stamp}.json`));
+    const names = fs.readdirSync(dir).filter((name) => name.startsWith('vault-') && name.endsWith('.json')).sort();
+    while (names.length > 8) fs.unlinkSync(path.join(dir, names.shift()));
+  } catch (error) {
+    console.error('Shop copy failed:', error.message);
+  }
+}
+
 export function readVault() {
   if (!fs.existsSync(file)) return { revision: 0 };
   try {
@@ -66,6 +84,7 @@ export function commitVault(snapshot) {
   fs.writeFileSync(file, JSON.stringify(next));
   remember(next, fs.statSync(file).mtimeMs);
   wake(next.revision);
+  keepShopCopy();
   syncVaultDebts(next).catch((error) => console.error('Debt copy failed:', error.message));
   return next;
 }
@@ -79,11 +98,22 @@ export function writeVault(snapshot) {
   const changed = vaultStamp(merged) !== vaultStamp(current);
   const base = Math.max(Number(current.revision) || 0, Number(snapshot?.revision) || 0);
   merged.revision = changed ? base + 1 : Number(current.revision) || 0;
-  if (!changed) return { ...current, revision: merged.revision };
+  if (!changed) {
+    if (incomingRev > currentRev) {
+      const next = { ...current, revision: incomingRev };
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, JSON.stringify(next));
+      remember(next, fs.statSync(file).mtimeMs);
+      wake(next.revision);
+      return next;
+    }
+    return { ...current, revision: currentRev };
+  }
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify(merged));
   remember(merged, fs.statSync(file).mtimeMs);
   wake(merged.revision);
+  keepShopCopy();
   syncVaultDebts(merged).catch((error) => console.error('Debt copy failed:', error.message));
   return merged;
 }

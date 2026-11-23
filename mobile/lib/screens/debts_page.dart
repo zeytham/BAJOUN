@@ -26,7 +26,17 @@ class DebtsPage extends StatefulWidget {
 
 class _DebtsPageState extends State<DebtsPage> {
   String _which = 'open';
+  String _age = 'all';
   ShopStore get store => widget.store;
+
+  bool _inAge(Map<String, Object?> debt) {
+    if (_which != 'open' || _age == 'all') return true;
+    final days = debtLateDays(debt);
+    if (_age == '0') return days <= 7;
+    if (_age == '8') return days >= 8 && days <= 30;
+    if (_age == '31') return days >= 31 && days <= 60;
+    return days > 60;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,7 +48,7 @@ class _DebtsPageState extends State<DebtsPage> {
         }
         final open = store.debts.where((row) => row['status'] == 'OPEN').toList();
         final closed = store.debts.where((row) => row['status'] == 'PAID' && !store.hiddenDebts.contains('${row['id']}')).toList();
-        final shown = _which == 'paid' ? closed : _which == 'all' ? [...open, ...closed] : open;
+        final shown = (_which == 'paid' ? closed : _which == 'all' ? [...open, ...closed] : open).where(_inAge).toList();
         return Scaffold(
           backgroundColor: skyPage,
           body: ListView(
@@ -54,36 +64,53 @@ class _DebtsPageState extends State<DebtsPage> {
               const SizedBox(height: 12),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(10),
-                decoration: vaultCard(),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _filter('open', t('Hayajalipwa'), open.length),
-                    _filter('paid', t('Yaliyolipwa'), closed.length),
-                    _filter('all', t('Zote'), open.length + closed.length),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
                 decoration: vaultCard(),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(t('Jumla inayosubiri'), style: TextStyle(color: muted)),
+                    Text(t('Jumla inayosubiri'), style: captionStyle),
+                    const SizedBox(height: 6),
                     FittedBox(
                       fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(tsh(store.debtTotal), style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w600, color: ink)),
+                      alignment: AlignmentDirectional.centerStart,
+                      child: Text(tsh(store.debtTotal), style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: Color(0xFFB45309))),
                     ),
-                    Text(tf('{0} wateja', ['${open.length}']), style: const TextStyle(color: muted)),
+                    const SizedBox(height: 4),
+                    Text(tf('{0} wateja', ['${open.length}']), style: captionStyle),
                   ],
                 ),
               ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _filter('open', t('Hayajalipwa'), open.length),
+                  _filter('paid', t('Yaliyolipwa'), closed.length),
+                  _filter('all', t('Zote'), open.length + closed.length),
+                ],
+              ),
+              if (_which == 'open') ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 40,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      _ageChip('all', t('Zote'), open.length),
+                      const SizedBox(width: 8),
+                      _ageChip('0', t('Siku 0–7'), open.where((row) => debtLateDays(row) <= 7).length),
+                      const SizedBox(width: 8),
+                      _ageChip('8', t('Siku 8–30'), open.where((row) => debtLateDays(row) >= 8 && debtLateDays(row) <= 30).length),
+                      const SizedBox(width: 8),
+                      _ageChip('31', t('Siku 31–60'), open.where((row) => debtLateDays(row) >= 31 && debtLateDays(row) <= 60).length),
+                      const SizedBox(width: 8),
+                      _ageChip('60', t('Zaidi ya siku 60'), open.where((row) => debtLateDays(row) > 60).length),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
               if (_which == 'paid' && (closed.isNotEmpty || store.hiddenDebts.isNotEmpty))
                 Padding(
@@ -110,6 +137,19 @@ class _DebtsPageState extends State<DebtsPage> {
           ),
         );
       },
+    );
+  }
+
+  Widget _ageChip(String key, String label, int count) {
+    final on = _age == key;
+    return ChoiceChip(
+      label: Text('$label  $count'),
+      selected: on,
+      showCheckmark: false,
+      selectedColor: const Color(0xFFB45309),
+      backgroundColor: Colors.white,
+      labelStyle: TextStyle(color: on ? Colors.white : ink, fontWeight: FontWeight.w700),
+      onSelected: (_) => setState(() => _age = key),
     );
   }
 
@@ -146,11 +186,21 @@ class _DebtsPageState extends State<DebtsPage> {
               children: [
                 Row(
                   children: [
-                    Expanded(child: Text('${debt['customer_name']}', style: const TextStyle(fontWeight: FontWeight.w600, color: ink))),
-                    Text(open ? tsh(balance) : t('Imelipwa'), style: TextStyle(fontWeight: FontWeight.w600, color: open ? const Color(0xFFB45309) : skyDeep)),
+                    Expanded(child: Text('${debt['customer_name']}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17, color: ink))),
+                    const SizedBox(width: 12),
+                    Text(open ? tsh(balance) : t('Imelipwa'), style: TextStyle(fontWeight: FontWeight.w700, color: open ? const Color(0xFFB45309) : skyDeep)),
                   ],
                 ),
-                Text('${showPhone('${debt['customer_phone']}')} · ${formatWhen('${debt['opened_at']}')}', style: const TextStyle(color: muted, fontSize: 12)),
+                if (showPhone('${debt['customer_phone']}').isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(showPhone('${debt['customer_phone']}'), style: captionStyle),
+                ],
+                const SizedBox(height: 4),
+                Text(formatWhen('${debt['opened_at']}'), style: captionStyle),
+                if (open) ...[
+                  const SizedBox(height: 4),
+                  Text('${t('Umri wa deni')}  ${tf('siku {0}', ['${debtLateDays(debt)}'])}', style: captionStyle),
+                ],
                 if (open && '${debt['due_at']}'.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 6),

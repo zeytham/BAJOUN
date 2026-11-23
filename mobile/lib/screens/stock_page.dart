@@ -225,7 +225,7 @@ class _StockPageState extends State<StockPage> {
         padding: const EdgeInsets.only(top: 16, bottom: 4),
         child: Row(
           children: [
-            Expanded(child: Text(name, style: sectionStyle)),
+            Expanded(child: Text(t(name), style: sectionStyle)),
             if (store.editStock && '${category['id']}' != 'phones')
               TextButton(
                 onPressed: () => _removeCategory(category),
@@ -342,11 +342,11 @@ class _StockPageState extends State<StockPage> {
   String _phoneBadge(String status) {
     switch (status) {
       case 'IN_STOCK':
-        return 'Dukani';
+        return t('Dukani');
       case 'FAULTY':
         return t('Matatizo');
       case 'WING':
-        return 'Imeazimwa';
+        return t('Imeazimwa');
       default:
         return t('Imeuzwa');
     }
@@ -411,42 +411,51 @@ class _StockPageState extends State<StockPage> {
     Widget? extra,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TapScale(
-            onTap: onTap,
-            radius: 16,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Container(
+        decoration: vaultCard(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TapScale(
+              onTap: onTap,
+              radius: 22,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17, color: ink)),
+                    if (meta.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(meta, style: captionStyle),
+                    ],
+                    const SizedBox(height: 12),
+                    Row(
                       children: [
-                        Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: ink)),
-                        const SizedBox(height: 2),
-                        Text(meta, maxLines: 1, overflow: TextOverflow.ellipsis, style: captionStyle),
+                        Expanded(child: Text(price, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: skyDeep))),
+                        const SizedBox(width: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: warn ? const Color(0xFFFFF8EF) : skyPage,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(badge, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: warn ? const Color(0xFFB45309) : skyDeep)),
+                        ),
                       ],
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(price, style: const TextStyle(fontWeight: FontWeight.w600, color: skyDeep)),
-                      const SizedBox(height: 4),
-                      Text(badge, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: warn ? const Color(0xFFB45309) : muted)),
-                    ],
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-          if (extra != null) Align(alignment: Alignment.centerRight, child: extra),
-        ],
+            if (extra != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
+                child: Align(alignment: Alignment.centerRight, child: extra),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -661,7 +670,7 @@ class _ProductFormState extends State<_ProductForm> {
               onChanged: (value) => setState(() => _category = value),
             ),
             Align(
-              alignment: Alignment.centerLeft,
+              alignment: AlignmentDirectional.centerStart,
               child: OutlinedButton.icon(onPressed: _newCategory, icon: const Icon(Icons.add), label: Text(t('Ongeza kundi'))),
             ),
             SoftField(controller: _price, label: t('Bei ya jumla'), keyboard: TextInputType.number, digitsOnly: true, maxLength: 9),
@@ -716,7 +725,7 @@ class _ProductFormState extends State<_ProductForm> {
             ),
             if (widget.existing != null)
               Align(
-                alignment: Alignment.centerLeft,
+                alignment: AlignmentDirectional.centerStart,
                 child: IconButton(tooltip: t('Ondoa'), onPressed: _busy ? null : _retire, icon: const Icon(Icons.delete_outline, color: Color(0xFFDC2626))),
               ),
           ],
@@ -983,7 +992,7 @@ class _PhoneGroupFormState extends State<_PhoneGroupForm> {
             ),
             if (widget.existing != null)
               Align(
-                alignment: Alignment.centerLeft,
+                alignment: AlignmentDirectional.centerStart,
                 child: IconButton(tooltip: t('Ondoa'), onPressed: _busy ? null : _retire, icon: const Icon(Icons.delete_outline, color: Color(0xFFDC2626))),
               ),
           ],
@@ -1074,7 +1083,7 @@ class _PhoneFormState extends State<_PhoneForm> {
               rule: t('IMEI iwe tarakimu 8 hadi 20.'),
             ),
             Align(
-              alignment: Alignment.centerLeft,
+              alignment: AlignmentDirectional.centerStart,
               child: TextButton.icon(
                 onPressed: _scanImei,
                 icon: const Icon(Icons.qr_code_scanner),
@@ -1150,7 +1159,7 @@ class _PhoneFormState extends State<_PhoneForm> {
             ),
             if (widget.existing != null)
               Align(
-                alignment: Alignment.centerLeft,
+                alignment: AlignmentDirectional.centerStart,
                 child: IconButton(tooltip: t('Futa'), onPressed: _busy ? null : _delete, icon: const Icon(Icons.delete_outline, color: Color(0xFFDC2626))),
               ),
           ],

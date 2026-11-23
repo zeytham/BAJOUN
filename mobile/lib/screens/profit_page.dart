@@ -41,6 +41,7 @@ class _ProfitPageState extends State<ProfitPage> {
         final gain = profit > 0 ? profit : 0.0;
         final loss = profit < 0 ? -profit : 0.0;
         final years = _years(store);
+        final channel = _channel(store, range.$1, range.$2);
         return Scaffold(
           backgroundColor: skyPage,
           appBar: AppBar(
@@ -98,6 +99,12 @@ class _ProfitPageState extends State<ProfitPage> {
               ),
               const SizedBox(height: 8),
               _stat(profit >= 0 ? t('Faida ya duka') : t('Hasara ya duka'), tsh(profit.abs()), emphasize: true, warn: profit < 0),
+              if (channel != null) ...[
+                const SizedBox(height: 8),
+                _stat(t('Rejareja'), tsh(channel.$1)),
+                const SizedBox(height: 8),
+                _stat(t('Kwa mawinga'), tsh(channel.$2)),
+              ],
               const SizedBox(height: 8),
               _sideCard(
                 t('Simu'),
@@ -246,7 +253,7 @@ class _ProfitPageState extends State<ProfitPage> {
           const SizedBox(height: 4),
           FittedBox(
             fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
+            alignment: AlignmentDirectional.centerStart,
             child: Text(value, style: TextStyle(fontSize: emphasize ? 26 : 18, fontWeight: FontWeight.w600, color: warn ? const Color(0xFFB45309) : ink)),
           ),
         ],
@@ -288,6 +295,34 @@ class _ProfitPageState extends State<ProfitPage> {
         ],
       ),
     );
+  }
+
+  (double, double)? _channel(ShopStore store, DateTime start, DateTime end) {
+    final linked = store.wingItems.map((row) => '${row['sale_id']}').where((id) => id.isNotEmpty).toSet();
+    if (linked.isEmpty) return null;
+    final live = <String>{};
+    for (final sale in store.sales) {
+      if (asInt(sale['voided']) == 1) continue;
+      final when = DateTime.tryParse('${sale['created_at']}')?.toLocal();
+      if (when == null || when.isBefore(start) || !when.isBefore(end)) continue;
+      live.add('${sale['id']}');
+    }
+    var shop = 0.0;
+    var wing = 0.0;
+    var seen = false;
+    for (final item in store.saleItems) {
+      final id = '${item['sale_id']}';
+      if (!live.contains(id)) continue;
+      final qty = asInt(item['qty']);
+      final gain = asInt(item['faulty']) == 1 ? 0.0 : (asDouble(item['price']) - asDouble(item['cost'])) * qty;
+      if (linked.contains(id)) {
+        wing += gain;
+        seen = true;
+      } else {
+        shop += gain;
+      }
+    }
+    return seen ? (shop, wing) : null;
   }
 
   (DateTime, DateTime, String) _range() {

@@ -531,7 +531,7 @@ Future<String?> askImei(BuildContext context, ShopStore store, {required String 
             rule: t('IMEI iwe tarakimu 8 hadi 20.'),
           ),
           Align(
-            alignment: Alignment.centerLeft,
+            alignment: AlignmentDirectional.centerStart,
             child: TextButton.icon(
               onPressed: () async {
                 store.holdLock = true;

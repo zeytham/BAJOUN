@@ -224,33 +224,43 @@ class _HistoryPageState extends State<HistoryPage> {
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
           onTap: () => _detail(sale),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '${sale['invoice']}',
-                        style: TextStyle(fontWeight: FontWeight.w600, color: ink, decoration: voided ? TextDecoration.lineThrough : null),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${sale['invoice']}',
+                          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: ink, decoration: voided ? TextDecoration.lineThrough : null),
+                        ),
                       ),
-                    ),
-                    Text(tsh(asDouble(sale['total'])), style: const TextStyle(fontWeight: FontWeight.w600, color: ink)),
+                      const SizedBox(width: 12),
+                      Text(tsh(asDouble(sale['total'])), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: ink)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text('${sale['customer_name']}', style: const TextStyle(fontWeight: FontWeight.w600, color: ink)),
+                  if ('${sale['summary']}'.trim().isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text('${sale['summary']}', maxLines: 2, overflow: TextOverflow.ellipsis, style: captionStyle),
                   ],
-                ),
-                const SizedBox(height: 6),
-                Text('${sale['customer_name']}', style: bodyStyle),
-                const SizedBox(height: 2),
-                Text('${sale['summary']}', maxLines: 2, overflow: TextOverflow.ellipsis, style: captionStyle),
-                const SizedBox(height: 8),
-                Text('${formatWhen('${sale['created_at']}')}  ·  ${sale['cashier_name']}', style: captionStyle),
-                const SizedBox(height: 2),
-                Text(status, style: TextStyle(color: balance > 0 || voided ? const Color(0xFFB45309) : skyDeep, fontWeight: FontWeight.w600)),
-              ],
+                  const SizedBox(height: 10),
+                  Text('${formatWhen('${sale['created_at']}')}    ${sale['cashier_name']}', style: captionStyle),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: balance > 0 || voided ? const Color(0xFFFFF8EF) : skyPage,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(status, style: TextStyle(color: balance > 0 || voided ? const Color(0xFFB45309) : skyDeep, fontWeight: FontWeight.w700)),
+                  ),
+                ],
+              ),
             ),
-          ),
         ),
       ),
     );

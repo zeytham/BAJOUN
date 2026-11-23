@@ -23,7 +23,26 @@ const extra = {
   'Anwani ianze na https.': { en: 'The address must start with https.', ar: 'العنوان يبدأ بـ https.' },
   'Weka ufunguo wa duka kutoka kwenye simu.': { en: 'Enter the shop key from the phone.', ar: 'أدخل مفتاح الدكان من الهاتف.' },
   'Daftari la duka liko hapa.': { en: 'The shop book is here.', ar: 'دفتر الدكان هنا.' },
-  'Thibitisha Muamala': { en: 'Confirm the sale', ar: 'أكّد البيع' },
+  'Maliza kwanza: arudishe bidhaa, au alipe alizouza.': { en: 'Finish first: they return the goods, or pay for what they sold.', ar: 'أنهِ أولاً: يرجع البضاعة، أو يدفع ما باعه.' },
+  'Ameuza': { en: 'Sold', ar: 'باع' },
+  'Ameuza x{0}': { en: 'Sold x{0}', ar: 'باع x{0}' },
+  'Analipa': { en: 'Paying', ar: 'يدفع' },
+  'Lipa baki {0}': { en: 'Pay the balance {0}', ar: 'ادفع المتبقي {0}' },
+  'Chagua alizouza na bei. Aka lipa baadaye, mtu hubaki wazi mpaka deni liishe.': { en: 'Choose what they sold and the price. If they pay later, the person stays open until the debt is clear.', ar: 'اختر ما باعه والسعر. إذا دفع لاحقاً، يبقى الشخص مفتوحاً حتى يصفى الدين.' },
+  'Bei ya chini {0}': { en: 'Floor {0}', ar: 'الحد الأدنى {0}' },
+  'Siku 0–7': { en: 'Days 0–7', ar: '٠–٧ أيام' },
+  'Siku 8–30': { en: 'Days 8–30', ar: '٨–٣٠ يوماً' },
+  'Siku 31–60': { en: 'Days 31–60', ar: '٣١–٦٠ يوماً' },
+  'Zaidi ya siku 60': { en: 'More than 60 days', ar: 'أكثر من ٦٠ يوماً' },
+  'Umri wa deni': { en: 'Debt age', ar: 'عمر الدين' },
+  'Simu zimekaa': { en: 'Phones sitting in stock', ar: 'هواتف راكدة' },
+  'Rejareja': { en: 'Retail', ar: 'تجزئة' },
+  'Kwa mawinga': { en: 'Through a wing', ar: 'عن طريق الجناح' },
+  'Siku za deni': { en: 'Days of credit', ar: 'أيام الدين' },
+  'Hifadhi mauzo': { en: 'Save the sale', ar: 'احفظ البيع' },
+  'Kiasi alicholipa': { en: 'Amount paid', ar: 'المبلغ المدفوع' },
+  'Mauzo yamehifadhiwa. Mtu hubaki wazi mpaka alipe au arudishe.': { en: 'The sale is saved. The person stays open until they pay or return the goods.', ar: 'حُفظ البيع. يبقى الشخص مفتوحاً حتى يدفع أو يرجع البضاعة.' },
+  'Malipo haya yanafunga mtu pale deni na bidhaa zote zinapoisha.': { en: 'This payment closes the person when the debt and every item are finished.', ar: 'هذه الدفعة تغلق الشخص عندما ينتهي الدين وكل السلع.' },
   'Imeorodheshwa kwa matumizi, walioonunua zaidi juu.': { en: 'Sorted by spending, the biggest buyers first.', ar: 'مرتبة حسب الإنفاق، الأكبر أولاً.' },
   'Leo': { en: 'Today', ar: 'اليوم' },
   'Jana': { en: 'Yesterday', ar: 'أمس' },
@@ -223,7 +242,13 @@ const extra = {
   'Mmiliki': { en: 'Owner', ar: 'المالك' },
   'Muuzaji': { en: 'Seller', ar: 'البائع' },
   'Onyesha upya': { en: 'Refresh', ar: 'حدّث' },
-  'Ghairi': { en: 'Cancel', ar: 'إلغاء' },
+  'Idadi': { en: 'Quantity', ar: 'الكمية' },
+  'Dukani': { en: 'In the shop', ar: 'في الدكان' },
+  'Imeazimwa': { en: 'Out with someone', ar: 'معارة' },
+  'Simu za IMEI': { en: 'Phones by IMEI', ar: 'هواتف حسب IMEI' },
+  'Futa kundi': { en: 'Delete group', ar: 'احذف المجموعة' },
+  'Staafu': { en: 'Retire', ar: 'أوقف' },
+  'Futa IMEI': { en: 'Delete IMEI', ar: 'احذف IMEI' },
   'Mpya': { en: 'New', ar: 'جديد' },
   'Kama mpya': { en: 'Like new', ar: 'كالجديد' },
   'Imetumika': { en: 'Used', ar: 'مستعمل' },
@@ -246,12 +271,72 @@ const extra = {
   'Lipa ya deni': { en: 'Lipa from debts', ar: 'Lipa الديون' },
   'Simu haiko dukani.': { en: 'That phone is not in the shop.', ar: 'هذا الهاتف ليس في الدكان.' },
   'Rudisha kwanza, kisha uondoe.': { en: 'Bring it back first, then remove it.', ar: 'أرجعها أولاً، ثم احذفها.' },
+  'Matumizi makubwa': { en: 'Biggest spending', ar: 'أكبر إنفاق' },
+  'Imeorodheshwa kwa jina.': { en: 'Sorted by name.', ar: 'مرتبة حسب الاسم.' },
+  'Thibitisha Muamala': { en: 'Confirm the sale', ar: 'أكّد البيع' },
+  'Bei': { en: 'Price', ar: 'السعر' },
+  'Baki': { en: 'Balance', ar: 'المتبقي' },
+  'Mifululizo': { en: 'Batches', ar: 'دفعات' },
+  'Faida kwa bidhaa': { en: 'Profit by item', ar: 'الربح حسب السلعة' },
+  'Faida kwa siku': { en: 'Profit by day', ar: 'الربح حسب اليوم' },
+  'Hali ya deni': { en: 'Debt status', ar: 'حالة الدين' },
+  'Baki kwa mteja': { en: 'Balance by customer', ar: 'المتبقي حسب الزبون' },
+  'Thamani kwa aina': { en: 'Value by kind', ar: 'القيمة حسب النوع' },
+  'Idadi kwa bidhaa': { en: 'Quantity by item', ar: 'الكمية حسب السلعة' },
+  'Manunuzi makubwa': { en: 'Biggest purchases', ar: 'أكبر المشتريات' },
+  'Mauzo kwa muuzaji': { en: 'Sales by seller', ar: 'المبيعات حسب البائع' },
+  'Risiti kwa muuzaji': { en: 'Receipts by seller', ar: 'الإيصالات حسب البائع' },
+  'Mauzo kwa kundi': { en: 'Sales by group', ar: 'المبيعات حسب المجموعة' },
+  'Idadi kwa kundi': { en: 'Quantity by group', ar: 'الكمية حسب المجموعة' },
+  'Upungufu': { en: 'Shortfall', ar: 'النقص' },
+  'Baki dhidi ya kiwango': { en: 'Balance against the level', ar: 'المتبقي مقابل الحد' },
+  'Mabadiliko kwa bidhaa': { en: 'Changes by item', ar: 'التغييرات حسب السلعة' },
+  'Mwendo kwa siku': { en: 'Movement by day', ar: 'الحركة حسب اليوم' },
+  'Mistari': { en: 'Lines', ar: 'الأسطر' },
+  'Kilichokopwa': { en: 'Borrowed', ar: 'المستدان' },
+  'Wenye namba': { en: 'With a number', ar: 'لديهم رقم' },
+  'Makundi': { en: 'Groups', ar: 'المجموعات' },
+  'Kubwa': { en: 'Largest', ar: 'الأكبر' },
+  'Kiwango': { en: 'Level', ar: 'الحد' },
+  'Miondoko': { en: 'Movements', ar: 'الحركات' },
+  'Kuingia': { en: 'In', ar: 'دخول' },
+  'Kutoka': { en: 'Out', ar: 'خروج' },
+  'Skrini': { en: 'Screen', ar: 'الشاشة' },
+  'Kaunta': { en: 'Counter', ar: 'الكاونتر' },
+  'Amelipa': { en: 'Paid', ar: 'دفع' },
+  'Ficha zilizofichwa': { en: 'Hide the hidden ones', ar: 'أخفِ المخفية' },
+  'Chanzo': { en: 'Source', ar: 'المصدر' },
+  'chenji': { en: 'change', ar: 'الباقي' },
+  'Andika RUDISHA': { en: 'Type RETURN', ar: 'اكتب أرجع' },
+  'Hakuna maelezo.': { en: 'No note.', ar: 'لا ملاحظة.' },
+  'Imesomwa': { en: 'Read', ar: 'مقروء' },
+  'baki {0}': { en: 'left {0}', ar: 'المتبقي {0}' },
+  'imerudi {0}': { en: 'returned {0}', ar: 'رجع {0}' },
+  'Bidhaa': { en: 'Items', ar: 'السلع' },
+  'Thamani': { en: 'Value', ar: 'القيمة' },
+  'Matatizo ya kuuza': { en: 'Sell the faulty ones', ar: 'بيع الأعطال' },
+  'Kumbukumbu': { en: 'Records', ar: 'السجلات' },
 };
+
+const folded = new Map();
+for (const [key, row] of Object.entries(phrases)) folded.set(key.toLowerCase(), row);
+for (const [key, row] of Object.entries(extra)) folded.set(key.toLowerCase(), row);
+
+const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
+
+export function marks(value) {
+  const text = String(value ?? '');
+  let lang = 'sw';
+  try { lang = localStorage.getItem('pv_lang') || 'sw'; } catch { /* ignore */ }
+  if (lang !== 'ar') return text;
+  return text.replace(/\d/g, (digit) => arabicDigits[digit]);
+}
 
 export function phrase(lang, text) {
   const sw = String(text ?? '');
   if (!sw || lang === 'sw') return sw;
-  const row = phrases[sw] || extra[sw];
+  const row = phrases[sw] || extra[sw] || folded.get(sw.toLowerCase());
   if (!row) return sw;
-  return lang === 'ar' ? row.ar : row.en;
+  const line = lang === 'ar' ? row.ar : row.en;
+  return line || sw;
 }
